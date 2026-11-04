@@ -21,11 +21,24 @@ Your real templates and bundles live in your own **config directory**.
 
 ## Install
 
+**Homebrew:**
+
+```bash
+brew trust iamnikolie/tap   # Homebrew 6 refuses untrusted third-party taps
+brew tap iamnikolie/tap
+brew install iamnikolie/tap/trafaret
+```
+
+**Prebuilt binary** — from [Releases](https://github.com/iamnikolie/trafaret/releases) (linux, darwin, windows ×
+amd64, arm64).
+
+**Go:**
+
 ```bash
 go install github.com/iamnikolie/trafaret@latest
 ```
 
-or from a checkout:
+**From a checkout:**
 
 ```bash
 make install            # builds ./trafaret and symlinks ~/.local/bin/trafaret -> ./trafaret

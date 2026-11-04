@@ -23,7 +23,8 @@ func TestNoPrivateStringsInSources(t *testing.T) {
 		"fibery" + ".io", "@" + "gmail", "iamnikolie" + ".info", "imn-" + "ao", "lg-" + "ao",
 	}
 	// The module path names the publisher: Go imports, go.mod, the Makefile's
-	// ldflags and the links in the README and the contributor docs. It is the
+	// ldflags and the links in the README and the contributor docs (plus the
+	// Homebrew tap name in the README). It is the
 	// only spelling allowed, and only in these files.
 	publisher := "iam" + "nikolie"
 	modulePath := "github.com/" + publisher + "/trafaret"
@@ -66,6 +67,10 @@ func TestNoPrivateStringsInSources(t *testing.T) {
 				}
 				if mayNamePublisher(e.Name()) {
 					low = strings.ReplaceAll(low, modulePath, "")
+				}
+				// the README's install section names the public Homebrew tap
+				if e.Name() == "README.md" {
+					low = strings.ReplaceAll(low, publisher+"/tap", "")
 				}
 				if strings.Contains(low, publisher) {
 					t.Errorf("%s names the publisher; only the module path may, and only in Go sources, go.mod, the Makefile, the README and the contributor docs", path)

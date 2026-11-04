@@ -481,3 +481,11 @@ func TestSkillPrintsTheEmbeddedReference(t *testing.T) {
 		}
 	})
 }
+
+func TestModuleVersion(t *testing.T) {
+	for in, want := range map[string]string{"": "", "(devel)": "", "v0.3.1": "v0.3.1"} {
+		if got := moduleVersion(in); got != want {
+			t.Errorf("moduleVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
