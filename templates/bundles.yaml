@@ -1,0 +1,27 @@
+# Bundle registry: a bundle name -> the templates it installs.
+#
+# These are EXAMPLES. They show the template format and every token family; they
+# are not meant to be installed as-is. A real config keeps its own templates in
+# <config>/templates/ — files there overlay these by path, and its own
+# bundles.yaml shadows this one, so only the bundles it lists exist for it.
+#
+#   skills:         dirs under templates/skills/ (every file in them renders;
+#                   *.tmpl through text/template, the suffix dropped)
+#   agents:         templates/agents/<name>.md.tmpl (Codex also gets a TOML form)
+#   cursorRules:    templates/cursor/rules/<name>.mdc.tmpl
+#   requires:       manifest blocks the templates read, checked by `validate`:
+#                   tickets (ticket protocol + run block), db (tools.db)
+#   sessionContext: a file under .claude/skills/ that a SessionStart hook in the
+#                   project's .claude/settings.json prints at every session start
+#                   (at most one active bundle per project)
+
+example:
+  skills: [example-tickets]
+  agents: [example-reviewer]
+  cursorRules: [example-rule]
+  requires: [tickets]
+  sessionContext: example-tickets/session-context.md
+
+example-db:
+  skills: [example-db]
+  requires: [db]

@@ -1,0 +1,50 @@
+---
+name: example-tickets
+description: Example skill — shows the ticket, run, gate, docs and memory tokens rendered for {{.Name}}. Use when picking up one {{.Name}} work item from {{if .Tickets.Work}}`{{.Tickets.DB}}` (Project `{{.Tickets.Project}}`){{else}}the `{{.Tickets.Space}}` space{{end}}. Applies only to the {{.Name}} repo at {{.RepoRoot}}.
+---
+
+# example-tickets — one work item, start to finish
+
+This file is an example template. Copy it into your config's `templates/skills/`, rename it and write
+your own process; the tokens below are the ones the engine fills from `manifest.yaml`.
+
+## 1 · Find the item
+
+```bash
+{{.Tickets.CLI}} --config {{.Tickets.Config}} list "{{.Tickets.TasksDB}}"{{.Tickets.TaskFilter}} --limit 20
+{{.Tickets.CLI}} --config {{.Tickets.Config}} list "{{.Tickets.BugsDB}}"{{.Tickets.BugFilter}} --limit 20
+```
+
+Refs look like `{{.Tickets.RefScheme.Task}}` / `{{.Tickets.RefScheme.Bug}}`. Take the top item of
+{{.Tickets.States.Todo}} by priority ({{.Tickets.PriorityChain}}); its dependencies are written as
+`{{.Tickets.DependsOn}}`. Fields worth reading besides the description: `{{.Tickets.Space}}/MR`
+(merge request URL){{if .Tickets.ExtraFields}}, {{.Tickets.ExtraFields}}{{end}}.
+
+Move it to {{.Tickets.States.InProgress}} before writing code; to {{.Tickets.States.InReview}} when
+the gates are green.
+
+## 2 · Recall
+
+`{{.Tools.Memory}} recall "<topic>"` (the `{{.Tools.Memory}}` {{.Tools.MemoryName | dash}} CLI) before
+reading code. Write durable, cross-item learnings back to {{.Tools.MemoryName}}.
+
+## 3 · Build on {{.VCS.DefaultBranch}}
+
+Conventions: {{range .Stack.ConventionsDocs}}`{{.}}` {{end}}— environment variables use the
+`{{.Stack.EnvPrefix}}` prefix. Commit messages: {{.VCS.CommitConvention}}.
+
+Gates (all green before {{.Tickets.States.InReview}}):
+
+{{range .Gates.Packages}}- `{{.Dir}}`: `{{.Cmd}}`
+{{end}}
+{{.Gates.LintBaseline}}
+
+## 4 · Docs
+
+The map is `{{.Docs.Map}}`; domain context lives in `{{.Docs.ContextDir}}/`.
+
+## Run profile
+
+This project runs `{{.Run.Profile}}`: review depth {{.Run.ReviewDepth}}, at most {{.Run.MaxRounds}}
+review rounds, order `{{.Run.Order}}`{{if .Run.OverlapOn}}, overlapping items allowed{{end}}.
+Files of this skill land under `{{.TargetRoot}}/skills/example-tickets/`.
