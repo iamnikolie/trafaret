@@ -1,6 +1,11 @@
-package main
+package engine
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestResolveWorkModeSharesOneDatabase(t *testing.T) {
 	p := Project{Tickets: Tickets{Space: "Development", DB: "Development/Work", Project: "Alpha",
@@ -37,5 +42,36 @@ func TestResolveLegacyModeLeavesWorkTokensEmpty(t *testing.T) {
 	}
 	if tk.ProjectFilter+tk.TaskFilter+tk.BugFilter+tk.TaskSet+tk.BugSet+tk.ProjectWhere+tk.ProjectParams != "" {
 		t.Fatalf("work tokens must be empty in legacy mode: %+v", tk)
+	}
+}
+
+func TestLoadManifestEnforcesEngine(t *testing.T) {
+	dir := t.TempDir()
+	write := func(body string) string {
+		p := filepath.Join(dir, "m.yaml")
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	if _, err := loadManifest(write("engine: \">=0.2.0\"\nprojects: {}\n"), "0.1.0"); err == nil || !strings.Contains(err.Error(), ">=0.2.0") {
+		t.Fatalf("a too-old binary must be refused, got %v", err)
+	}
+	if _, err := loadManifest(write("engine: \">=0.2.0\"\nprojects: {}\n"), "0.2.0"); err != nil {
+		t.Fatalf("a satisfying binary must load: %v", err)
+	}
+	if _, err := loadManifest(write("projects: {}\n"), "0.1.0"); err != nil {
+		t.Fatalf("no engine field: no check: %v", err)
+	}
+	if _, err := loadManifest(write("someFutureField: 1\nprojects: {}\n"), "0.1.0"); err != nil {
+		t.Fatalf("unknown fields must be ignored: %v", err)
+	}
+	if _, err := loadManifest(write("engine: \">=99.0.0\"\nprojects: {}\n"), "dev"); err != nil {
+		t.Fatalf("dev builds always pass: %v", err)
+	}
+	// an unquoted YAML float ("engine: 0.2") is still a usable constraint
+	if _, err := loadManifest(write("engine: 0.2\nprojects: {}\n"), "0.3.0"); err == nil {
+		t.Fatal("engine: 0.2 is an exact-version constraint; 0.3.0 does not satisfy it")
 	}
 }

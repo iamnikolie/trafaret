@@ -1,4 +1,4 @@
-package main
+package engine
 
 import (
 	"encoding/json"
@@ -56,7 +56,7 @@ func TestOverlayBundlesShadowEmbedded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "skills", "own", "SKILL.md.tmpl"), []byte("---\nname: own\ndescription: own skill of {{.Name}}\n---\nbody\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	e, err := newEngine(options{config: cfg})
+	e, err := New(Options{Config: cfg})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestOverlayBundlesShadowEmbedded(t *testing.T) {
 }
 
 func TestSessionContextAtMostOne(t *testing.T) {
-	reg := map[string]bundle{
+	reg := map[string]Bundle{
 		"a": {SessionContext: "a/ctx.md"},
 		"b": {SessionContext: "b/ctx.md"},
 		"c": {},

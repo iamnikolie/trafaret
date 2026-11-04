@@ -1,5 +1,9 @@
 # trafaret
 
+[![CI](https://github.com/iamnikolie/trafaret/actions/workflows/ci.yml/badge.svg)](https://github.com/iamnikolie/trafaret/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/iamnikolie/trafaret.svg)](https://pkg.go.dev/github.com/iamnikolie/trafaret)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Render a project-parameterized library of agent skills, subagents and rules into your repositories'
 native **Claude Code**, **Cursor** and **Codex** locations.
 
@@ -157,6 +161,7 @@ trafaret install myhome                # copy global/skills + agents/*/skills in
 trafaret --config ~/my-config diff myproject      # global flags may come before the command
 trafaret root                          # the resolved config directory
 trafaret serve                         # the local operator manual (see below)
+trafaret skill                         # the agent-facing reference for this CLI
 trafaret version
 ```
 
@@ -222,7 +227,7 @@ trafaret serve --addr 127.0.0.1:4477
 A multi-page app (overview, live state, catalog, guardrails, how-to, where-to-edit) in two languages —
 `/en/<page>` and `/ru/<page>`. It renders every page from the config directory on **every refresh**,
 shows the live per-project sync status (the same comparison as `trafaret diff`), the template catalog
-and bundle table, and the how-to tables. Localhost only; mermaid is vendored (`docs/site-assets/`), so
+and bundle table, and the how-to tables. Localhost only; mermaid is vendored (`internal/site/assets/`), so
 it works offline.
 
 ## Bundles
@@ -263,20 +268,22 @@ with no `bundles.yaml` of its own gets the embedded examples.
 | `example` | skill `example-tickets` (ticket, run-profile, gate, docs and memory tokens), agent `example-reviewer`, Cursor rule `example-rule`; `requires: [tickets]`; `sessionContext` set |
 | `example-db` | skill `example-db` (read-only database access through the CLI named in `tools.db.cli`); `requires: [db]`, so it needs no ticket protocol |
 
-They exist to show the format. Copy what you need into your config's `templates/` and write your own.
+They exist to show the format; their sources are in [`examples/`](examples/). Copy what you need into your config's `templates/` and write your own.
 
 ## Layout of this repository
 
 | Path | What |
 |---|---|
-| `main.go` | the CLI: load manifest → render per target → lint → write (sha256-idempotent); the bundle registry loader |
-| `config.go` | config-directory resolution, the embedded-template overlay, the engine version gate |
-| `site.go`, `site_page.go`, `site_strings.go` | the live operator site (`trafaret serve`) |
-| `templates/bundles.yaml` | the embedded bundle registry (examples) |
-| `templates/skills/`, `templates/agents/`, `templates/cursor/rules/` | the embedded example templates (embedded with `go:embed`) |
+| `main.go` | calls `cmd.Execute()` |
+| `cmd/` | the cobra commands, one file per command (`install`, `list`, `validate`, `serve`, …); `skill.md` is the embedded agent reference printed by `trafaret skill`; `version.go` holds the build-stamped `version` |
+| `internal/engine/` | the core: manifest and resolution, the bundle registry loader, render → lint → write (sha256-idempotent), prune, homes, the managed session hook, config-directory resolution, the templates overlay, the `engine:` version gate |
+| `internal/site/` | the live operator site (`trafaret serve`): data collection, page skeleton, EN/RU strings, vendored mermaid in `assets/` |
+| `examples/` | the embedded example templates (`go:embed`): `bundles.yaml`, `skills/`, `agents/`, `cursor/rules/` |
 | `docs/token-reference.md` | the template contract — every `{{.Token}}` |
 | `docs/onboarding.md` | how to onboard a project |
 | `docs/spec.md` | design and rationale |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## License
 

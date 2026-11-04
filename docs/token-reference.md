@@ -1,7 +1,7 @@
 # Token reference — the template contract
 
-Template files (`*.tmpl`) are Go `text/template` files. The binary embeds a few examples under
-`templates/`; a config directory adds its own, or overrides an embedded one, at
+Template files (`*.tmpl`) are Go `text/template` files. The binary embeds a few examples (the
+`examples/` directory of the repository); a config directory adds its own, or overrides an embedded one, at
 `<config>/templates/<same path>`, and groups them into bundles in `<config>/templates/bundles.yaml`
 (see "Bundle registry" at the end). The renderer (`trafaret`) loads `manifest.yaml`, resolves one
 **Project** struct per project, and executes every template with that project as the root dot (`.`).

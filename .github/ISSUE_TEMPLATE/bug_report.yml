@@ -1,0 +1,32 @@
+name: Bug report
+description: Something the CLI does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `trafaret version`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verbose
+    attributes:
+      label: Verbose output
+      description: >
+        Output of the same command with `--verbose` (or `trafaret validate`), and
+        the part of your manifest.yaml or template involved, if you can share it.
+        Redact hostnames, tokens, workspace names and paths — this is a public
+        issue tracker.
+      render: text
+    validations:
+      required: false

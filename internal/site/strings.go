@@ -1,4 +1,4 @@
-package main
+package site
 
 import "html/template"
 
@@ -221,7 +221,7 @@ back the embedded entries you still use)</td></tr>`,
 <tr><td>which artifacts a project gets</td><td><code>bundles:</code> list in <code>manifest.yaml</code></td></tr>
 <tr><td>which templates a bundle installs</td><td><code>&lt;config&gt;/templates/bundles.yaml</code></td></tr>
 <tr><td>what tokens exist / mean</td><td colspan="2"><code>docs/token-reference.md</code> (the template contract)</td></tr>
-<tr><td>this page</td><td colspan="2"><code>site_page.go</code> (skeleton) + <code>site_strings.go</code> (EN/RU prose) — the tables fix themselves</td></tr>`,
+<tr><td>this page</td><td colspan="2"><code>internal/site/page.go</code> (skeleton) + <code>internal/site/strings.go</code> (EN/RU prose) — the tables fix themselves</td></tr>`,
 
 	"side_live": "re-rendered from the repo on every refresh",
 	"prev":      "previous", "next": "next",
@@ -445,7 +445,7 @@ workspace — лучше маленький multi-root, чем открытый 
 <tr><td>какие артефакты получает проект</td><td>список <code>bundles:</code> в <code>manifest.yaml</code></td></tr>
 <tr><td>какие шаблоны ставит бандл</td><td><code>&lt;config&gt;/templates/bundles.yaml</code></td></tr>
 <tr><td>какие есть токены и что они значат</td><td colspan="2"><code>docs/token-reference.md</code> (контракт шаблонов)</td></tr>
-<tr><td>эту страницу</td><td colspan="2"><code>site_page.go</code> (скелет) + <code>site_strings.go</code> (тексты EN/RU) — таблицы чинятся сами</td></tr>`,
+<tr><td>эту страницу</td><td colspan="2"><code>internal/site/page.go</code> (скелет) + <code>internal/site/strings.go</code> (тексты EN/RU) — таблицы чинятся сами</td></tr>`,
 
 	"side_live": "перерендеривается из репозитория при каждом обновлении",
 	"prev":      "назад", "next": "дальше",

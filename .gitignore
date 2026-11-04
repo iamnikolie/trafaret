@@ -1,5 +1,7 @@
-# built binary
+# built binary and release output
 /trafaret
+/dist/
+*.exe
 
 # go
 /vendor/

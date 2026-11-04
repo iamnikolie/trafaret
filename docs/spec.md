@@ -58,9 +58,9 @@ Alternatives rejected:
     bundle per project may set it.
 - **Engine gate.** An optional `engine:` constraint in the manifest makes a config refuse to run on a
   binary that is too old for the tokens it uses.
-- `templates/` (embedded examples) — `bundles.yaml`, `skills/<name>/` (a `SKILL.md.tmpl` plus any other
-  files, all rendered), `agents/<name>.md.tmpl` (subagent contracts), `cursor/rules/<name>.mdc.tmpl`
-  (Cursor rules).
+- `examples/` (embedded examples; in a config the same layout is its `templates/` overlay) —
+  `bundles.yaml`, `skills/<name>/` (a `SKILL.md.tmpl` plus any other files, all rendered),
+  `agents/<name>.md.tmpl` (subagent contracts), `cursor/rules/<name>.mdc.tmpl` (Cursor rules).
 - Codex projection — skills render to `.agents/skills/`; Markdown agent contracts render to
   `.agents/agents/` for skill references and convert to native `.codex/agents/*.toml` with name,
   description, instructions, model tier, and sandbox mode.

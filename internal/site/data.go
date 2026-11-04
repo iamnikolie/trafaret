@@ -1,26 +1,15 @@
-// trafaret serve — a local, live-rendered manual for the library trafaret manages.
-//
-// The page is rendered from manifest.yaml + templates (built in, plus the
-// <config>/templates overlay) + projects/ on EVERY request: an agent's edit to any
-// of the on-disk files is, by construction, an edit to this site. Nothing is
-// published anywhere — the server binds localhost only.
-package main
+package site
 
 import (
-	_ "embed"
-	"fmt"
-	"html/template"
 	"io/fs"
-	"net/http"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
-)
 
-//go:embed docs/site-assets/mermaid.min.js
-var mermaidJS []byte
+	"github.com/iamnikolie/trafaret/internal/engine"
+)
 
 // --- view model -------------------------------------------------------------
 
@@ -71,8 +60,8 @@ type siteProjSkills struct {
 
 // --- data gathering ---------------------------------------------------------
 
-func collectSiteData(eng *Engine) (*siteData, error) {
-	m, err := loadManifest(eng.Manifest)
+func collectSiteData(eng *engine.Engine) (*siteData, error) {
+	m, err := eng.LoadManifest()
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +84,7 @@ func collectSiteData(eng *Engine) (*siteData, error) {
 			Branch:   p.VCS.DefaultBranch,
 			Space:    p.Tickets.Space,
 			Targets:  strings.Join(p.Targets, " + "),
-			Bundles:  bundlesDisplay(p),
+			Bundles:  p.BundlesDisplay(),
 		}
 		if sp.Branch == "" {
 			sp.Branch = "—"
@@ -106,7 +95,7 @@ func collectSiteData(eng *Engine) (*siteData, error) {
 		if sp.Bundles == "" {
 			sp.Bundles = "(verbatim sources only)"
 		}
-		res, err := install(p, eng, subtract(p.Bundles, p.Disabled), p.Targets, false, true /* dry-run */, true /* prune report */, false /* full target set */)
+		res, err := eng.DryRun(p)
 		if err != nil {
 			sp.Err = err.Error()
 		} else {
@@ -245,84 +234,4 @@ func frontmatterValue(s, key string) string {
 		}
 	}
 	return ""
-}
-
-// --- server -----------------------------------------------------------------
-
-func cmdServe(eng *Engine, opt options) {
-	addr := opt.addr
-	if addr == "" {
-		addr = "127.0.0.1:4477"
-	}
-	if !strings.Contains(addr, ":") {
-		addr = "127.0.0.1:" + addr
-	}
-	page := template.Must(template.New("site").Parse(siteSkeleton))
-	langs := map[string]map[string]template.HTML{"en": siteEN, "ru": siteRU}
-
-	servePage := func(w http.ResponseWriter, lang, slug string, t map[string]template.HTML) {
-		d, err := collectSiteData(eng)
-		if err != nil {
-			http.Error(w, "collect: "+err.Error(), 500)
-			return
-		}
-		pd := sitePageData{siteData: d, Lang: lang, Page: slug, T: t}
-		for i, sp := range sitePages {
-			link := sitePageLink{Slug: sp.Slug, Title: t[sp.TitleKey], No: fmt.Sprintf("%02d", i+1)}
-			pd.PageList = append(pd.PageList, link)
-			if sp.Slug == slug {
-				if i > 0 {
-					prev := sitePageLink{Slug: sitePages[i-1].Slug, Title: t[sitePages[i-1].TitleKey]}
-					pd.Prev = &prev
-				}
-				if i < len(sitePages)-1 {
-					next := sitePageLink{Slug: sitePages[i+1].Slug, Title: t[sitePages[i+1].TitleKey]}
-					pd.Next = &next
-				}
-			}
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := page.Execute(w, pd); err != nil {
-			fmt.Fprintln(os.Stderr, "trafaret: render site:", err)
-		}
-	}
-
-	http.HandleFunc("/mermaid.min.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/javascript")
-		_, _ = w.Write(mermaidJS)
-	})
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			// forwards to the language saved in localStorage (default EN)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write([]byte(langIndex))
-			return
-		}
-		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		t, ok := langs[parts[0]]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		if len(parts) == 1 {
-			http.Redirect(w, r, "/"+parts[0]+"/overview", http.StatusFound)
-			return
-		}
-		slug := parts[1]
-		known := false
-		for _, sp := range sitePages {
-			if sp.Slug == slug {
-				known = true
-				break
-			}
-		}
-		if !known || len(parts) > 2 {
-			http.NotFound(w, r)
-			return
-		}
-		servePage(w, parts[0], slug, t)
-	})
-
-	fmt.Printf("trafaret site → http://%s  (live: re-rendered from %s on every refresh; Ctrl-C to stop)\n", addr, eng.ConfigDir)
-	check(http.ListenAndServe(addr, nil))
 }

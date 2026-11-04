@@ -2,9 +2,10 @@
 BIN     := trafaret
 PREFIX  ?= $(HOME)/.local/bin
 PKGS    := ./...
+PKG     := github.com/iamnikolie/trafaret/cmd
 # Stamped into the binary (`trafaret version`, manifest `engine:` gate). Unstamped = "dev".
 VERSION ?= $(shell git describe --tags --match 'v[0-9]*' --dirty 2>/dev/null || echo dev)
-LDFLAGS := -X main.version=$(VERSION)
+LDFLAGS := -s -w -X $(PKG).version=$(VERSION)
 
 .DEFAULT_GOAL := build
 .PHONY: build install uninstall run test vet fmt tidy check site clean help
@@ -27,9 +28,9 @@ uninstall:
 run: build
 	./$(BIN) $(ARGS)
 
-## test: run the unit test suite
+## test: run the unit test suite (with the race detector, as CI does)
 test:
-	go test $(PKGS)
+	go test -race $(PKGS)
 
 ## vet: run go vet
 vet:
@@ -51,9 +52,10 @@ site: build
 	@( sleep 0.7; open "http://127.0.0.1:4477" 2>/dev/null || true ) &
 	./$(BIN) serve
 
-## clean: remove the built binary
+## clean: remove the built binary and release output
 clean:
 	rm -f $(BIN)
+	rm -rf dist
 
 ## help: list targets
 help:

@@ -1,10 +1,10 @@
-package main
+package site
 
 import "html/template"
 
 // The trafaret serve site: a multi-page layout — fixed full-height sidebar, one page
 // per section, full-viewport content. One skeleton template + per-language
-// string maps (site_strings.go); the page is chosen via .Page.
+// string maps (strings.go); the page is chosen via .Page.
 
 type sitePageData struct {
 	*siteData
