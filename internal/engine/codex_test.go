@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -50,24 +49,32 @@ func TestCodexAgentKeepsWritableAgentsWritable(t *testing.T) {
 	}
 }
 
+func TestCodexAgentRejectsBrokenFrontmatter(t *testing.T) {
+	for name, in := range map[string]string{
+		"none":         "just text",
+		"unterminated": "---\nname: a\ndescription: d\n",
+		"no name":      "---\ndescription: d\n---\nbody\n",
+		"no desc":      "---\nname: a\n---\nbody\n",
+	} {
+		if _, err := codexAgent([]byte(in)); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+}
+
+// A Codex project gets the readable contract and the native TOML, both derived
+// from one render; a rendered agent that Codex cannot convert fails the render.
 func TestCodexRenderIncludesReadableAndNativeAgentForms(t *testing.T) {
-	p := testProject(t)
-	files, err := render(p, testEngine(t), []string{"example"}, []string{"codex"})
-	if err != nil {
-		t.Fatal(err)
+	e, _, _ := newConfig(t, "defaults:\n  workspace: {{WS}}\nprojects:\n  p:\n    repoRoot: p\n    harnesses: [codex]\n    agents: [a]\n", adapterFiles)
+	got := renderEntry(t, e, "p")
+	if got[".agents/agents/a.md"] == "" || !strings.Contains(got[".codex/agents/a.toml"], `name = "a"`) {
+		t.Fatalf("Codex render lacks the readable or native form: %v", paths(got))
 	}
-	want := map[string]bool{
-		filepath.Join(p.RepoRoot, ".agents", "agents", "example-reviewer.md"):  false,
-		filepath.Join(p.RepoRoot, ".codex", "agents", "example-reviewer.toml"): false,
-	}
-	for _, f := range files {
-		if _, ok := want[f.path]; ok {
-			want[f.path] = true
-		}
-	}
-	for path, found := range want {
-		if !found {
-			t.Errorf("Codex render missing %s", path)
-		}
+
+	e, _, _ = newConfig(t, "defaults:\n  workspace: {{WS}}\nprojects:\n  p:\n    repoRoot: p\n    harnesses: [codex]\n    agents: [bad]\n", map[string]string{
+		"templates/agents/bad.md": "no frontmatter at all\n",
+	})
+	if _, err := renderEntryErr(t, e, "p"); err == nil || !strings.Contains(err.Error(), `codex agent "bad"`) {
+		t.Fatalf("a broken agent must name itself: %v", err)
 	}
 }

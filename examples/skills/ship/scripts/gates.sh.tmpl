@@ -1,0 +1,9 @@
+#!/bin/sh
+# Rendered from gates.sh.tmpl for {{.Name}}: the gate list comes from vars.gates.
+set -e
+cd "{{.RepoRoot}}"
+{{range .Vars.gates}}echo "== {{.name}}"
+{{.cmd}}
+{{end}}{{if has .Vars "e2e"}}echo "== e2e"
+{{.Vars.e2e}}
+{{end}}echo "all gates green"

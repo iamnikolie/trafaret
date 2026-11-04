@@ -2,7 +2,6 @@ package engine
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,13 +20,13 @@ func TestLayeredFSIsAValidFS(t *testing.T) {
 	top := fstest.MapFS{
 		"skills/alpha/SKILL.md.tmpl": {Data: []byte("top alpha")},
 		"skills/gamma/SKILL.md.tmpl": {Data: []byte("top gamma")},
-		"cursor/rules/r.mdc.tmpl":    {Data: []byte("top rule")},
+		"rules/r.md.tmpl":            {Data: []byte("top rule")},
 	}
 	l := layerFS(top, base)
 
 	if err := fstest.TestFS(l,
 		"skills/alpha/SKILL.md.tmpl", "skills/alpha/extra.md", "skills/beta/SKILL.md.tmpl",
-		"skills/gamma/SKILL.md.tmpl", "agents/x.md.tmpl", "cursor/rules/r.mdc.tmpl"); err != nil {
+		"skills/gamma/SKILL.md.tmpl", "agents/x.md.tmpl", "rules/r.md.tmpl"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,80 +64,45 @@ func TestLayeredFSIsAValidFS(t *testing.T) {
 }
 
 func TestOverlayReplacesAndAddsInRender(t *testing.T) {
-	cfg := writeManifest(t, filepath.Join(evalDir(t, t.TempDir()), "cfg"))
-	overlay := filepath.Join(cfg, "templates")
-	write := func(rel, body string) {
-		path := filepath.Join(overlay, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	manifest := "defaults:\n  workspace: {{WS}}\n  harnesses: [claude]\nprojects:\n  p:\n    repoRoot: p\n    bundles: [ship]\n    vars: {branch: main, lang: Go, company: Acme, reviewers: 1, gates: [], tracker: {kind: github, repo: a/b}}\n"
+	// the overlay replaces one embedded skill file and adds a sibling next to it
+	e, _, _ := newConfig(t, manifest, map[string]string{
+		"templates/skills/ship/SKILL.md.tmpl": "---\nname: ship\ndescription: overlaid for {{.Name}}\n---\nOVERLAY BODY {{.Vars.branch}}\n",
+		"templates/skills/ship/notes.md.tmpl": "notes for {{.Name}}\n",
+	})
+	if e.OverlayDir == "" {
+		t.Fatal("overlay not discovered")
 	}
-	// replaces a built-in skill file, adds a sibling file next to it
-	write("skills/example-tickets/SKILL.md.tmpl", "---\nname: example-tickets\ndescription: overlaid for {{.Name}}\n---\nOVERLAY BODY {{.Tickets.Space}}\n")
-	write("skills/example-tickets/notes.md.tmpl", "notes for {{.Name}}\n")
-
-	e, err := New(Options{Config: cfg})
-	if err != nil {
-		t.Fatal(err)
+	got := renderEntry(t, e, "p")
+	if !strings.Contains(got[".claude/skills/ship/SKILL.md"], "OVERLAY BODY main") || !strings.Contains(got[".claude/skills/ship/SKILL.md"], "overlaid for p") {
+		t.Errorf("overlay SKILL.md did not win:\n%s", got[".claude/skills/ship/SKILL.md"])
 	}
-	if e.OverlayDir != overlay {
-		t.Fatalf("overlay not discovered: %q", e.OverlayDir)
+	if got[".claude/skills/ship/notes.md"] != "notes for p\n" {
+		t.Errorf("overlay-only file not rendered: %q", got[".claude/skills/ship/notes.md"])
+	}
+	// the embedded sibling the overlay did not touch is still there
+	if _, ok := got[".claude/skills/ship/scripts/gates.sh"]; !ok {
+		t.Errorf("untouched embedded file must remain, got:\n%s", sortedPaths(got))
 	}
 
-	p := testProject(t)
-	files, err := render(p, e, []string{"example"}, []string{"claude"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := map[string]string{}
-	for _, f := range files {
-		if strings.Contains(filepath.ToSlash(f.path), "/skills/example-tickets/") {
-			got[filepath.Base(f.path)] = string(f.bytes)
-		}
-	}
-	if !strings.Contains(got["SKILL.md"], "OVERLAY BODY Acme") || !strings.Contains(got["SKILL.md"], "overlaid for demo") {
-		t.Errorf("overlay SKILL.md did not win:\n%s", got["SKILL.md"])
-	}
-	if got["notes.md"] != "notes for demo\n" {
-		t.Errorf("overlay-only file not rendered: %q", got["notes.md"])
-	}
-
-	// the built-in set alone renders the original
-	files, err = render(p, testEngine(t), []string{"example"}, []string{"claude"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range files {
-		if filepath.Base(f.path) == "SKILL.md" && strings.Contains(string(f.bytes), "OVERLAY BODY") {
-			t.Fatal("embedded render must not see the overlay")
-		}
+	// the embedded set alone renders the original
+	e2, _, _ := newConfig(t, manifest, nil)
+	if strings.Contains(renderEntry(t, e2, "p")[".claude/skills/ship/SKILL.md"], "OVERLAY BODY") {
+		t.Fatal("embedded render must not see the overlay")
 	}
 }
 
 func TestTemplatesFlagOverridesOverlayDir(t *testing.T) {
 	cfg := writeManifest(t, filepath.Join(evalDir(t, t.TempDir()), "cfg"))
-	if err := os.MkdirAll(filepath.Join(cfg, "templates", "skills", "example-db"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cfg, "templates", "skills", "example-db", "SKILL.md.tmpl"), []byte("FROM CONFIG OVERLAY"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTree(t, filepath.Join(cfg, "templates"), map[string]string{"skills/standup/SKILL.md": "FROM CONFIG OVERLAY"})
 	custom := filepath.Join(t.TempDir(), "custom")
-	if err := os.MkdirAll(filepath.Join(custom, "skills", "example-db"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(custom, "skills", "example-db", "SKILL.md.tmpl"), []byte("FROM FLAG OVERLAY"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTree(t, custom, map[string]string{"skills/standup/SKILL.md": "FROM FLAG OVERLAY"})
 
 	e, err := New(Options{Config: cfg, Templates: custom})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := fs.ReadFile(e.Templates, "skills/example-db/SKILL.md.tmpl")
+	b, err := fs.ReadFile(e.Templates, "skills/standup/SKILL.md")
 	if err != nil || string(b) != "FROM FLAG OVERLAY" {
 		t.Fatalf("--templates must replace <config>/templates: %q %v", b, err)
 	}
@@ -149,8 +113,8 @@ func TestTemplatesFlagOverridesOverlayDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = fs.ReadFile(e.Templates, "skills/example-db/SKILL.md.tmpl")
-	if err != nil || strings.Contains(string(b), "OVERLAY") {
+	b, err = fs.ReadFile(e.Templates, "skills/standup/SKILL.md")
+	if err != nil || strings.Contains(string(b), "OVERLAY") || !strings.Contains(string(b), "# standup") {
 		t.Fatalf("empty --templates must leave only the embedded file: %q %v", b, err)
 	}
 

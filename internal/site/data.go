@@ -17,40 +17,63 @@ type siteData struct {
 	GeneratedAt string
 	RepoDir     string
 	Projects    []siteProject
+	Homes       []siteHome
 	Bundles     []siteBundle
-	Skills      []siteTemplate
+	Skills      []siteSkill
 	Agents      []siteTemplate
 	Rules       []siteTemplate
 	ProjSkills  []siteProjSkills
+	SourceErr   string // the source namespace could not be built (a duplicate name, ...)
+}
+
+// siteSync is the live sync status of a project or a home: the same comparison
+// as `trafaret diff`.
+type siteSync struct {
+	Install int
+	Update  int
+	Skip    int
+	InSync  bool
+	Err     string
 }
 
 type siteProject struct {
-	Name     string
-	RepoRoot string
-	Branch   string
-	Space    string
-	Targets  string
-	Bundles  string
-	Install  int
-	Update   int
-	Skip     int
-	InSync   bool
-	Err      string
+	Name      string
+	RepoRoot  string
+	Harnesses string
+	Bundles   string
+	Skills    string
+	siteSync
+}
+
+type siteHome struct {
+	Name    string
+	Harness string
+	Dir     string
+	Bundles string
+	Skills  string
+	siteSync
 }
 
 type siteBundle struct {
-	Name   string
-	Skills string
-	Agents string
-	Rules  string
-	UsedBy string
+	Name     string
+	Skills   string
+	Agents   string
+	Rules    string
+	Requires string
+	UsedBy   string
 }
 
 type siteTemplate struct {
 	Name        string
 	Description string
 	Words       int
-	Path        string
+	Path        string // where the source lives, relative to the config dir (or the embedded set)
+}
+
+// siteSkill is a skill of the namespace with the source directory it comes from.
+type siteSkill struct {
+	siteTemplate
+	Origin string // templates | examples | global | role
 }
 
 type siteProjSkills struct {
@@ -70,7 +93,27 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 		RepoDir:     eng.ConfigDir,
 	}
 
-	// projects + live sync status (same comparison as `trafaret diff`)
+	sync := func(res []engine.FileStatus, err error) siteSync {
+		var s siteSync
+		if err != nil {
+			s.Err = err.Error()
+			return s
+		}
+		for _, f := range res {
+			switch f.Status {
+			case "install":
+				s.Install++
+			case "update", "remove":
+				s.Update++
+			case "skip":
+				s.Skip++
+			}
+		}
+		s.InSync = s.Install == 0 && s.Update == 0
+		return s
+	}
+
+	// projects + live sync status
 	var names []string
 	for n := range m.Projects {
 		names = append(names, n)
@@ -79,39 +122,42 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 	for _, n := range names {
 		p := m.Projects[n]
 		sp := siteProject{
-			Name:     n,
-			RepoRoot: p.RepoRoot,
-			Branch:   p.VCS.DefaultBranch,
-			Space:    p.Tickets.Space,
-			Targets:  strings.Join(p.Targets, " + "),
-			Bundles:  p.BundlesDisplay(),
-		}
-		if sp.Branch == "" {
-			sp.Branch = "—"
-		}
-		if sp.Space == "" {
-			sp.Space = "—"
+			Name:      n,
+			RepoRoot:  p.RepoRoot,
+			Harnesses: strings.Join(p.Harnesses, " + "),
+			Bundles:   p.BundlesDisplay(),
+			Skills:    strings.Join(eng.ProjectSkills(p), ", "),
 		}
 		if sp.Bundles == "" {
-			sp.Bundles = "(verbatim sources only)"
+			sp.Bundles = "—"
 		}
-		res, err := eng.DryRun(p)
-		if err != nil {
-			sp.Err = err.Error()
-		} else {
-			for _, f := range res {
-				switch f.Status {
-				case "install":
-					sp.Install++
-				case "update", "remove":
-					sp.Update++
-				case "skip":
-					sp.Skip++
-				}
-			}
-			sp.InSync = sp.Install == 0 && sp.Update == 0
+		if sp.Skills == "" {
+			sp.Skills = "—"
 		}
+		sp.siteSync = sync(eng.DryRunProject(p))
 		d.Projects = append(d.Projects, sp)
+	}
+
+	// homes + live sync status
+	var homeNames []string
+	for n := range m.Homes {
+		homeNames = append(homeNames, n)
+	}
+	sort.Strings(homeNames)
+	for _, n := range homeNames {
+		h := m.Homes[n]
+		sh := siteHome{
+			Name:    n,
+			Harness: h.Harness,
+			Dir:     h.Dir,
+			Bundles: strings.Join(h.Bundles, ", "),
+			Skills:  eng.HomeSkills(h),
+		}
+		if sh.Bundles == "" {
+			sh.Bundles = "—"
+		}
+		sh.siteSync = sync(eng.DryRunHome(h))
+		d.Homes = append(d.Homes, sh)
 	}
 
 	// bundle registry + reverse usage
@@ -119,6 +165,11 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 	for _, n := range names {
 		for _, b := range m.Projects[n].Bundles {
 			usedBy[b] = append(usedBy[b], n)
+		}
+	}
+	for _, n := range homeNames {
+		for _, b := range m.Homes[n].Bundles {
+			usedBy[b] = append(usedBy[b], "home:"+n)
 		}
 	}
 	var bnames []string
@@ -129,18 +180,34 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 	for _, bn := range bnames {
 		b := eng.Bundles[bn]
 		d.Bundles = append(d.Bundles, siteBundle{
-			Name:   bn,
-			Skills: strings.Join(b.Skills, ", "),
-			Agents: strings.Join(b.Agents, ", "),
-			Rules:  strings.Join(b.CursorRules, ", "),
-			UsedBy: strings.Join(usedBy[bn], ", "),
+			Name:     bn,
+			Skills:   strings.Join(b.Skills, ", "),
+			Agents:   strings.Join(b.Agents, ", "),
+			Rules:    strings.Join(b.Rules, ", "),
+			Requires: strings.Join(b.Requires, ", "),
+			UsedBy:   strings.Join(usedBy[bn], ", "),
 		})
 	}
 
-	// template catalog
-	d.Skills = catalogDir(eng.Templates, "skills", "templates/skills", true)
-	d.Agents = catalogFiles(eng.Templates, "agents", "templates/agents", ".md.tmpl")
-	d.Rules = catalogFiles(eng.Templates, "cursor/rules", "templates/cursor/rules", ".mdc.tmpl")
+	// source catalog: every skill of the namespace with the directory it comes from
+	ns, err := eng.Namespace()
+	if err != nil {
+		d.SourceErr = err.Error()
+	} else {
+		for _, name := range ns.SkillNames() {
+			s := ns.Skills[name]
+			st := siteSkill{Origin: s.Origin}
+			st.Name, st.Path = name, s.Dir
+			if main, b, err := s.Main(); err == nil {
+				st.Description = frontmatterValue(string(b), "description")
+				st.Words = len(strings.Fields(string(b)))
+				st.Path = path.Join(s.Dir, main)
+			}
+			d.Skills = append(d.Skills, st)
+		}
+		d.Agents = fileCatalog(ns.AgentNames(), ns.Agents)
+		d.Rules = fileCatalog(ns.RuleNames(), ns.Rules)
+	}
 
 	// per-project verbatim sources
 	projFS := os.DirFS(eng.ProjectsDir())
@@ -149,7 +216,7 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 			if !e.IsDir() {
 				continue
 			}
-			skills := catalogDir(projFS, path.Join(e.Name(), "skills"), "projects/"+e.Name()+"/skills", false)
+			skills := catalogDir(projFS, path.Join(e.Name(), "skills"), "projects/"+e.Name()+"/skills")
 			if len(skills) > 0 {
 				d.ProjSkills = append(d.ProjSkills, siteProjSkills{Project: e.Name(), Skills: skills})
 			}
@@ -158,9 +225,23 @@ func collectSiteData(eng *engine.Engine) (*siteData, error) {
 	return d, nil
 }
 
-// catalogDir lists <dir>/<name>/SKILL.md[.tmpl] entries of fsys with frontmatter
+func fileCatalog(names []string, src map[string]*engine.FileSource) []siteTemplate {
+	var out []siteTemplate
+	for _, n := range names {
+		f := src[n]
+		t := siteTemplate{Name: n, Path: f.Label}
+		if b, err := f.Read(); err == nil {
+			t.Description = frontmatterValue(string(b), "description")
+			t.Words = len(strings.Fields(string(b)))
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// catalogDir lists the <dir>/<name>/SKILL.md entries of fsys with frontmatter
 // metadata; label is the path prefix shown on the page.
-func catalogDir(fsys fs.FS, dir, label string, tmpl bool) []siteTemplate {
+func catalogDir(fsys fs.FS, dir, label string) []siteTemplate {
 	var out []siteTemplate
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
@@ -170,11 +251,7 @@ func catalogDir(fsys fs.FS, dir, label string, tmpl bool) []siteTemplate {
 		if !e.IsDir() {
 			continue
 		}
-		base := "SKILL.md"
-		if tmpl {
-			base += ".tmpl"
-		}
-		p := path.Join(dir, e.Name(), base)
+		p := path.Join(dir, e.Name(), "SKILL.md")
 		b, err := fs.ReadFile(fsys, p)
 		if err != nil {
 			continue
@@ -183,34 +260,7 @@ func catalogDir(fsys fs.FS, dir, label string, tmpl bool) []siteTemplate {
 			Name:        e.Name(),
 			Description: frontmatterValue(string(b), "description"),
 			Words:       len(strings.Fields(string(b))),
-			Path:        path.Join(label, e.Name(), base),
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
-}
-
-// catalogFiles lists flat <dir>/<name><suffix> entries of fsys.
-func catalogFiles(fsys fs.FS, dir, label, suffix string) []siteTemplate {
-	var out []siteTemplate
-	entries, err := fs.ReadDir(fsys, dir)
-	if err != nil {
-		return nil
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), suffix) {
-			continue
-		}
-		p := path.Join(dir, e.Name())
-		b, err := fs.ReadFile(fsys, p)
-		if err != nil {
-			continue
-		}
-		out = append(out, siteTemplate{
-			Name:        strings.TrimSuffix(e.Name(), suffix),
-			Description: frontmatterValue(string(b), "description"),
-			Words:       len(strings.Fields(string(b))),
-			Path:        path.Join(label, e.Name()),
+			Path:        path.Join(label, e.Name(), "SKILL.md"),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -218,8 +268,8 @@ func catalogFiles(fsys fs.FS, dir, label, suffix string) []siteTemplate {
 }
 
 // frontmatterValue extracts a single-line scalar from a raw frontmatter block.
-// Templates keep {{.Token}} expressions — shown as-is on purpose: the tokens
-// ARE the documentation of what varies per project.
+// Templates keep their {{...}} expressions — shown as-is on purpose: they ARE
+// the documentation of what varies per project.
 func frontmatterValue(s, key string) string {
 	if !strings.HasPrefix(s, "---\n") {
 		return ""

@@ -7,44 +7,6 @@ import (
 	"testing"
 )
 
-func TestResolveWorkModeSharesOneDatabase(t *testing.T) {
-	p := Project{Tickets: Tickets{Space: "Development", DB: "Development/Work", Project: "Alpha",
-		Boards: Boards{Tasks: "Tasks", Bugs: "Bugs"}}}
-	resolve(&p, Defaults{Workspace: "/ws"})
-	tk := p.Tickets
-	if !tk.Work || tk.TasksDB != "Development/Work" || tk.BugsDB != "Development/Work" {
-		t.Fatalf("work mode not resolved: %+v", tk)
-	}
-	want := map[string]string{
-		"ProjectFilter": ` --filter "Development/Project=Alpha"`,
-		"TaskFilter":    ` --filter "Development/Project=Alpha" --filter "Development/Type=Task"`,
-		"BugFilter":     ` --filter "Development/Project=Alpha" --filter "Development/Type=Bug"`,
-		"TaskSet":       ` "Development/Project=Alpha" "Development/Type=Task"`,
-		"BugSet":        ` "Development/Project=Alpha" "Development/Type=Bug"`,
-		"ProjectWhere":  `"q/where": ["=", ["Development/Project", "enum/name"], "$project"],`,
-		"ProjectParams": ` --params '{"$project":"Alpha"}'`,
-	}
-	got := map[string]string{"ProjectFilter": tk.ProjectFilter, "TaskFilter": tk.TaskFilter, "BugFilter": tk.BugFilter,
-		"TaskSet": tk.TaskSet, "BugSet": tk.BugSet, "ProjectWhere": tk.ProjectWhere, "ProjectParams": tk.ProjectParams}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s = %q, want %q", k, got[k], v)
-		}
-	}
-}
-
-func TestResolveLegacyModeLeavesWorkTokensEmpty(t *testing.T) {
-	p := Project{Tickets: Tickets{Space: "Old", Boards: Boards{Tasks: "Tasks", Bugs: "Bugs"}}}
-	resolve(&p, Defaults{Workspace: "/ws"})
-	tk := p.Tickets
-	if tk.Work || tk.TasksDB != "Old/Tasks" || tk.BugsDB != "Old/Bugs" {
-		t.Fatalf("legacy mode changed: %+v", tk)
-	}
-	if tk.ProjectFilter+tk.TaskFilter+tk.BugFilter+tk.TaskSet+tk.BugSet+tk.ProjectWhere+tk.ProjectParams != "" {
-		t.Fatalf("work tokens must be empty in legacy mode: %+v", tk)
-	}
-}
-
 func TestLoadManifestEnforcesEngine(t *testing.T) {
 	dir := t.TempDir()
 	write := func(body string) string {
@@ -55,10 +17,10 @@ func TestLoadManifestEnforcesEngine(t *testing.T) {
 		return p
 	}
 
-	if _, err := loadManifest(write("engine: \">=0.2.0\"\nprojects: {}\n"), "0.1.0"); err == nil || !strings.Contains(err.Error(), ">=0.2.0") {
+	if _, err := loadManifest(write("engine: \">=0.3.0\"\nprojects: {}\n"), "0.2.0"); err == nil || !strings.Contains(err.Error(), ">=0.3.0") {
 		t.Fatalf("a too-old binary must be refused, got %v", err)
 	}
-	if _, err := loadManifest(write("engine: \">=0.2.0\"\nprojects: {}\n"), "0.2.0"); err != nil {
+	if _, err := loadManifest(write("engine: \">=0.3.0\"\nprojects: {}\n"), "0.3.0"); err != nil {
 		t.Fatalf("a satisfying binary must load: %v", err)
 	}
 	if _, err := loadManifest(write("projects: {}\n"), "0.1.0"); err != nil {
@@ -70,8 +32,42 @@ func TestLoadManifestEnforcesEngine(t *testing.T) {
 	if _, err := loadManifest(write("engine: \">=99.0.0\"\nprojects: {}\n"), "dev"); err != nil {
 		t.Fatalf("dev builds always pass: %v", err)
 	}
-	// an unquoted YAML float ("engine: 0.2") is still a usable constraint
-	if _, err := loadManifest(write("engine: 0.2\nprojects: {}\n"), "0.3.0"); err == nil {
-		t.Fatal("engine: 0.2 is an exact-version constraint; 0.3.0 does not satisfy it")
+	// an unquoted YAML float ("engine: 0.3") is still a usable constraint
+	if _, err := loadManifest(write("engine: 0.3\nprojects: {}\n"), "0.4.0"); err == nil {
+		t.Fatal("engine: 0.3 is an exact-version constraint; 0.4.0 does not satisfy it")
+	}
+}
+
+func TestLoadManifestResolvesPathsAndHarnesses(t *testing.T) {
+	t.Setenv("HOME", "/home/someone")
+	p := filepath.Join(t.TempDir(), "m.yaml")
+	body := `defaults:
+  workspace: /work
+  harnesses: [claude, codex]
+projects:
+  rel: {repoRoot: rel}
+  abs: {repoRoot: /elsewhere/abs, harnesses: [cursor]}
+  tilde: {repoRoot: ~/code/tilde}
+homes:
+  h: {harness: codex, dir: ~/.codex}
+`
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := loadManifest(p, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Projects["rel"].RepoRoot != "/work/rel" || m.Projects["abs"].RepoRoot != "/elsewhere/abs" || m.Projects["tilde"].RepoRoot != "/home/someone/code/tilde" {
+		t.Errorf("repoRoots: %+v", m.Projects)
+	}
+	if strings.Join(m.Projects["rel"].Harnesses, ",") != "claude,codex" || strings.Join(m.Projects["abs"].Harnesses, ",") != "cursor" {
+		t.Errorf("harnesses: %v / %v", m.Projects["rel"].Harnesses, m.Projects["abs"].Harnesses)
+	}
+	if h := m.Homes["h"]; h.Dir != "/home/someone/.codex" || h.Name != "h" || h.Harness != "codex" {
+		t.Errorf("home: %+v", h)
+	}
+	if m.Projects["rel"].Name != "rel" {
+		t.Error("project name not filled from its key")
 	}
 }

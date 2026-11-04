@@ -1,0 +1,6 @@
+---
+description: How work lands in acme-api — always on while editing inside /work/acme-api.
+alwaysApply: true
+---
+
+In acme-api every change lands on `main` through the `ship` skill; never push past a red gate.

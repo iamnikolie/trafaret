@@ -1,0 +1,53 @@
+# A runnable demo config: two projects with different vars get the same
+# `ship` bundle; one home gets a plain skill. Rendered output is committed
+# under out/ — compare it with the sources in examples/ to see the templating.
+#
+#   trafaret --config examples/demo validate
+#   trafaret --config examples/demo install acme-api --dry-run
+
+engine: ">=0.3.0"
+
+vars:                       # config-wide
+  company: Acme
+  reviewers: 1
+
+defaults:
+  workspace: /work
+  harnesses: [claude, codex, cursor]
+  vars:                     # every project and home, unless overridden
+    branch: main
+    tracker: { kind: github }
+
+projects:
+  acme-api:
+    repoRoot: acme-api
+    bundles: [ship]
+    vars:
+      lang: Go
+      tracker: { repo: acme/api }          # merged: kind stays github
+      gates:
+        - { name: test, cmd: go test ./... }
+        - { name: lint, cmd: golangci-lint run }
+
+  acme-web:
+    repoRoot: acme-web
+    bundles: [ship]
+    vars:
+      lang: TypeScript
+      branch: develop                      # overrides defaults.vars.branch
+      reviewers: 2                         # overrides vars.reviewers
+      tracker: { kind: jira, host: acme.atlassian.net, key: WEB }
+      gates:
+        - { name: test, cmd: pnpm test }
+        - { name: types, cmd: pnpm tsc --noEmit }
+      e2e: pnpm playwright test
+
+homes:
+  me-claude:
+    harness: claude
+    dir: /tmp/trafaret-demo/claude   # scratch dirs: installing the demo never touches a real harness
+    skills: [standup]
+  me-codex:
+    harness: codex
+    dir: /tmp/trafaret-demo/codex
+    skills: [standup]

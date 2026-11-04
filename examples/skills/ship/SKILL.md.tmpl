@@ -1,0 +1,34 @@
+---
+name: ship
+description: Use when a change in {{.Name}} is ready to land — runs the {{len .Vars.gates}} gates, writes the commit with its {{.Vars.tracker.kind}} reference, and opens the review against {{.Vars.branch}}. Applies only to the {{.Name}} repo.
+---
+
+# ship — land a change in {{.Name}}
+
+{{.Vars.company}} · {{.Vars.lang}} · target branch `{{.Vars.branch}}`.
+
+## 1 · Gates
+
+Every gate green before anything else:
+
+{{range .Vars.gates}}- **{{.name}}** — `{{.cmd}}`
+{{end}}
+{{- if has .Vars "e2e"}}- **e2e** (slow, last) — `{{.Vars.e2e}}`
+{{end}}
+All of them in order, stopping at the first red: `{{.TargetRoot}}/skills/ship/scripts/gates.sh`.
+
+{{if eq .Harness "codex" -}}
+Want a second pair of eyes? Run the `gatekeeper` custom agent (`.codex/agents/gatekeeper.toml`).
+{{- else -}}
+Want a second pair of eyes? Dispatch the `gatekeeper` subagent — it re-runs the gates read-only.
+{{- end}}
+
+## 2 · Commit
+
+One commit, message `<what changed> (<ref>)`, where the ref is the issue — e.g.
+`{{template "issueRef" .}}`, linked as {{template "issueURL" .}}.
+
+## 3 · Review
+
+Open the review against `{{.Vars.branch}}`; it needs {{.Vars.reviewers}} approval{{if gt .Vars.reviewers 1}}s{{end}}.
+Your open reviews: `{{.TargetRoot}}/skills/ship/scripts/my-reviews.sh`.

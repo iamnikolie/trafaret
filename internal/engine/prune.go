@@ -5,19 +5,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
-// pruneStale deletes previously-recorded artifacts that the current render no
-// longer produces, then rewrites the track file with the current set.
-func pruneStale(repoRoot string, newSet map[string]bool, targets []string, preserveOtherTargets, dryRun bool) ([]FileStatus, error) {
-	trackPath := filepath.Join(repoRoot, filepath.FromSlash(trackFile))
+func jsonIndent(v any) ([]byte, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	return append(b, '\n'), err
+}
+
+func readTrack(trackPath string) ([]string, error) {
 	var old []string
 	if b, err := os.ReadFile(trackPath); err == nil {
 		if err := json.Unmarshal(b, &old); err != nil {
 			return nil, fmt.Errorf("%s: corrupt track file: %w", trackPath, err)
 		}
+	}
+	return old, nil
+}
+
+// pruneStale deletes previously-recorded artifacts that the current render no
+// longer produces, then rewrites the track file with the current set. It only
+// ever deletes paths trafaret itself recorded, and only under a harness
+// directory.
+func pruneStale(repoRoot string, newSet map[string]bool, targets []string, preserveOtherTargets, dryRun bool) ([]FileStatus, error) {
+	trackPath := filepath.Join(repoRoot, filepath.FromSlash(trackFile))
+	old, err := readTrack(trackPath)
+	if err != nil {
+		return nil, err
 	}
 	if preserveOtherTargets {
 		for _, r := range old {
@@ -27,12 +41,12 @@ func pruneStale(repoRoot string, newSet map[string]bool, targets []string, prese
 			}
 		}
 	}
+	roots := projectManagedRoots()
 	var res []FileStatus
 	for _, r := range old {
 		r = filepath.ToSlash(filepath.Clean(r))
-		if newSet[r] || strings.Contains(r, "..") ||
-			!(strings.HasPrefix(r, ".claude/") || strings.HasPrefix(r, ".cursor/") ||
-				strings.HasPrefix(r, ".agents/") || strings.HasPrefix(r, ".codex/")) {
+		top, _, _ := strings.Cut(r, "/")
+		if newSet[r] || strings.Contains(r, "..") || !contains(roots, top) {
 			continue
 		}
 		abs := filepath.Join(repoRoot, filepath.FromSlash(r))
@@ -45,8 +59,7 @@ func pruneStale(repoRoot string, newSet map[string]bool, targets []string, prese
 			}
 			// drop now-empty parent dirs, but never managed harness roots
 			for d := filepath.Dir(abs); ; d = filepath.Dir(d) {
-				base := filepath.Base(d)
-				if base == ".claude" || base == ".cursor" || base == ".agents" || base == ".codex" || d == repoRoot {
+				if contains(roots, filepath.Base(d)) || d == repoRoot {
 					break
 				}
 				if os.Remove(d) != nil { // non-empty or protected — stop
@@ -57,31 +70,54 @@ func pruneStale(repoRoot string, newSet map[string]bool, targets []string, prese
 		res = append(res, FileStatus{abs, "remove"})
 	}
 	if !dryRun {
-		cur := make([]string, 0, len(newSet))
-		for r := range newSet {
-			cur = append(cur, r)
-		}
-		sort.Strings(cur)
-		b, _ := json.MarshalIndent(cur, "", "  ")
-		if err := os.MkdirAll(filepath.Dir(trackPath), 0o755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(trackPath, append(b, '\n'), 0o644); err != nil {
+		if err := writeTrack(trackPath, newSet); err != nil {
 			return nil, err
 		}
 	}
 	return res, nil
 }
 
-func pathBelongsToTargets(path string, targets []string) bool {
-	switch {
-	case strings.HasPrefix(path, ".agents/"), strings.HasPrefix(path, ".codex/"):
-		return contains(targets, "codex")
-	case strings.HasPrefix(path, ".cursor/"):
-		return contains(targets, "cursor")
-	case strings.HasPrefix(path, ".claude/"):
-		return contains(targets, "claude") || contains(targets, "cursor")
-	default:
-		return false
+// pruneHome does the same for one directory of a home (skills/, agents/,
+// rules/): it deletes files recorded on the last install that the current render
+// no longer produces, then rewrites that directory's track file. A directory
+// that never held anything gets no track file.
+func pruneHome(dir string, newSet map[string]bool, dryRun bool) ([]FileStatus, error) {
+	trackPath := filepath.Join(dir, homeTrackFile)
+	old, err := readTrack(trackPath)
+	if err != nil {
+		return nil, err
 	}
+	var res []FileStatus
+	for _, r := range old {
+		r = filepath.ToSlash(filepath.Clean(r))
+		if newSet[r] || strings.Contains(r, "..") || filepath.IsAbs(r) {
+			continue
+		}
+		abs := filepath.Join(dir, filepath.FromSlash(r))
+		if _, err := os.Stat(abs); err != nil {
+			continue
+		}
+		if !dryRun {
+			if err := os.Remove(abs); err != nil {
+				return nil, err
+			}
+			for d := filepath.Dir(abs); d != dir && strings.HasPrefix(d, dir); d = filepath.Dir(d) {
+				if os.Remove(d) != nil {
+					break
+				}
+			}
+		}
+		res = append(res, FileStatus{abs, "remove"})
+	}
+	if !dryRun && (len(newSet) > 0 || old != nil || fileExists(trackPath)) {
+		if err := writeTrack(trackPath, newSet); err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }

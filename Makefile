@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --match 'v[0-9]*' --dirty 2>/dev/null || 
 LDFLAGS := -s -w -X $(PKG).version=$(VERSION)
 
 .DEFAULT_GOAL := build
-.PHONY: build install uninstall run test vet fmt tidy check site clean help
+.PHONY: build install uninstall run test golden vet fmt tidy check site clean help
 
 ## build: compile the trafaret binary into ./$(BIN)
 build:
@@ -31,6 +31,10 @@ run: build
 ## test: run the unit test suite (with the race detector, as CI does)
 test:
 	go test -race $(PKGS)
+
+## golden: regenerate examples/demo/out (the committed render of the demo); review the diff like code
+golden:
+	go test ./... -run Golden -update
 
 ## vet: run go vet
 vet:

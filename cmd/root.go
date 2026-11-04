@@ -60,12 +60,13 @@ func (e exitError) Error() string { return fmt.Sprintf("exit status %d", e.code)
 
 var rootCmd = &cobra.Command{
 	Use:   "trafaret",
-	Short: "Render a shared agent/skill/rule library into projects",
-	Long: `trafaret — render a shared agent/skill/rule library into projects.
+	Short: "Write a skill, agent or rule once; render it into every harness",
+	Long: `trafaret — write a skill, agent or rule once; render it into every harness.
 
-One library of templates plus per-project token values in a manifest.yaml,
-rendered into each repository's native Claude Code, Cursor and Codex locations.
-Writes are sha256-idempotent.
+One library of templates plus free vars in a manifest.yaml, rendered into
+Claude Code, Codex and Cursor — for per-repo projects and for user-level homes
+(~/.claude, ~/.codex, ~/.cursor) through one pipeline. Writes are
+sha256-idempotent.
 
 Run 'trafaret skill' for the full agent reference.`,
 	// Anything that is not a known command lands in RunE, which reports it the
@@ -185,10 +186,10 @@ func init() {
 	rootCmd.SetFlagErrorFunc(flagError)
 
 	pf := rootCmd.PersistentFlags()
-	pf.StringVar(&configFlag, "config", "", "config directory: holds manifest.yaml, global/, agents/, projects/; or $TRAFARET_CONFIG")
+	pf.StringVar(&configFlag, "config", "", "config directory: holds manifest.yaml, templates/, global/, agents/, projects/; or $TRAFARET_CONFIG")
 	pf.StringVar(&manifestFlag, "manifest", "", "manifest file; its directory becomes the config directory")
 	pf.StringVar(&templatesFlag, "templates", "", "templates overlay directory (default: <config>/templates)")
-	pf.StringVar(&targetFlag, "target", "", "override the manifest targets: claude|cursor|codex|both|all")
+	pf.StringVar(&targetFlag, "target", "", "override the harnesses: claude|cursor|codex|both|all (homes: only those of that harness)")
 	pf.StringVar(&whatFlag, "what", "", "install only these bundles (comma-separated; skips pruning)")
 	pf.StringVar(&addrFlag, "addr", "", "serve: listen address (default 127.0.0.1:4477)")
 	pf.BoolVar(&allFlag, "all", false, "install every project and every home")

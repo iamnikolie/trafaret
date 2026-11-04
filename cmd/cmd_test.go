@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+// Accepted so `go test ./... -run Golden -update` works across packages; the
+// golden test itself lives in internal/engine.
+var _ = flag.Bool("update", false, "regenerate golden files (internal/engine)")
 
 // cli runs one command line through the real command tree and returns the exit
 // code with what went to each stream. Flag values are reset first: the command
@@ -41,7 +46,8 @@ func resetFlags(c *cobra.Command) {
 }
 
 // writeConfig creates a config directory with a manifest holding one project that
-// installs the embedded read-only database example into its own repo directory.
+// installs the embedded plain `standup` skill into its own repo directory, and
+// one home that does the same into a directory of its own.
 func writeConfig(t *testing.T) (cfg, repo string) {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -55,13 +61,17 @@ func writeConfig(t *testing.T) (cfg, repo string) {
 		}
 	}
 	manifest := `defaults:
-  targets: [claude]
+  harnesses: [claude]
 projects:
   demo:
     repoRoot: ` + repo + `
-    bundles: [example-db]
-    tools:
-      db: { cli: dbq, config: acme, env: dev, schema: demo, tunnel: "true" }
+    skills: [standup]
+    vars: { branch: main }
+homes:
+  me:
+    harness: codex
+    dir: ` + filepath.Join(root, "home") + `
+    skills: [standup]
 `
 	if err := os.WriteFile(filepath.Join(cfg, "manifest.yaml"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
@@ -301,7 +311,7 @@ func TestInstallNeedsANameOrAll(t *testing.T) {
 		t.Errorf("unknown project: exit %d, stderr %q", code, errOut)
 	}
 	code, _, errOut = cli(t, "install", "demo", "--target", "bogus", "--config", cfg)
-	if code != 1 || errOut != "trafaret: invalid --target (claude|cursor|codex|both|all): bogus\n" {
+	if code != 1 || errOut != "trafaret: invalid --target (claude|codex|cursor|both|all): bogus\n" {
 		t.Errorf("bad target: exit %d, stderr %q", code, errOut)
 	}
 }
@@ -310,7 +320,7 @@ func TestInstallThenDiffIsInSync(t *testing.T) {
 	cfg, repo := writeConfig(t)
 
 	code, out, errOut := cli(t, "validate", "--config", cfg)
-	if code != 0 || out != "ok: 1 project(s), 0 home(s) valid\n" || errOut != "" {
+	if code != 0 || out != "ok: 1 project(s), 1 home(s) valid\n" || errOut != "" {
 		t.Fatalf("validate: exit %d, stdout %q, stderr %q", code, out, errOut)
 	}
 
@@ -334,7 +344,7 @@ func TestInstallThenDiffIsInSync(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(out, "demo: 1 install, 0 update, 0 skip, 0 remove\n") {
 		t.Fatalf("install: exit %d, stdout %q", code, out)
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".claude", "skills", "example-db", "SKILL.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(repo, ".claude", "skills", "standup", "SKILL.md")); err != nil {
 		t.Fatalf("skill not written: %v", err)
 	}
 
@@ -372,18 +382,18 @@ func TestEngineGateReadsTheStampedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cfg, "manifest.yaml"), append([]byte("engine: \">=0.2.0\"\n"), manifest...), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cfg, "manifest.yaml"), append([]byte("engine: \">=0.3.0\"\n"), manifest...), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	old := version
 	t.Cleanup(func() { version = old })
 
-	version = "v0.1.0"
+	version = "v0.2.0"
 	code, _, errOut := cli(t, "validate", "--config", cfg)
-	if code != 1 || !strings.Contains(errOut, "manifest requires trafaret >=0.2.0, this binary is v0.1.0") {
+	if code != 1 || !strings.Contains(errOut, "manifest requires trafaret >=0.3.0, this binary is v0.2.0") {
 		t.Errorf("an old binary must be refused: exit %d, stderr %q", code, errOut)
 	}
-	version = "v0.2.0"
+	version = "v0.3.0"
 	if code, _, errOut := cli(t, "validate", "--config", cfg); code != 0 {
 		t.Errorf("a satisfying binary must pass: exit %d, stderr %q", code, errOut)
 	}
@@ -393,17 +403,50 @@ func TestEngineGateReadsTheStampedVersion(t *testing.T) {
 	}
 }
 
-func TestListShowsProjectsAndJSON(t *testing.T) {
+func TestListShowsProjectsHomesAndJSON(t *testing.T) {
 	cfg, _ := writeConfig(t)
 
 	code, out, _ := cli(t, "list", "--config", cfg)
-	if code != 0 || !strings.HasPrefix(out, "PROJECT          TARGETS    TICKETS  BUNDLES\n") ||
-		!strings.Contains(out, "demo             claude") || !strings.Contains(out, "example-db") {
+	if code != 0 || !strings.HasPrefix(out, "PROJECT          HARNESSES            BUNDLES          SKILLS\n") ||
+		!strings.Contains(out, "demo             claude               -                standup\n") ||
+		!strings.Contains(out, "\nHOME             HARNESS    DIR") || !strings.Contains(out, "me               codex      ") {
 		t.Errorf("list: exit %d, stdout:\n%s", code, out)
 	}
 	code, out, _ = cli(t, "list", "--json", "--config", cfg)
-	if code != 0 || !strings.Contains(out, `"demo": {`) || !strings.Contains(out, `"Bundles": [`) {
-		t.Errorf("list --json: exit %d, stdout:\n%s", code, out)
+	for _, want := range []string{`"projects": {`, `"homes": {`, `"demo": {`, `"Harnesses": [`, `"Skills": [`, `"Harness": "codex"`} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Errorf("list --json lacks %q: exit %d, stdout:\n%s", want, code, out)
+		}
+	}
+}
+
+// A home installs through the same command as a project, into its harness
+// layout; --target selects homes by harness.
+func TestInstallAHomeAndTargetSelectsByHarness(t *testing.T) {
+	cfg, repo := writeConfig(t)
+	root := filepath.Dir(repo)
+
+	code, out, _ := cli(t, "install", "--all", "--target", "claude", "--dry-run", "--config", cfg)
+	if code != 0 || strings.Contains(out, "home:") || !strings.Contains(out, "demo: 1 install") || !strings.Contains(out, ".claude/skills/standup") {
+		t.Fatalf("--target claude skips the codex home and renders the project for claude: exit %d\n%s", code, out)
+	}
+	code, out, _ = cli(t, "install", "--all", "--target", "codex", "--config", cfg)
+	if code != 0 || !strings.HasPrefix(out, "home:me: 1 install, 0 update, 0 skip, 0 remove\n") || !strings.Contains(out, "demo: 1 install") || !strings.Contains(out, ".agents/skills/standup") {
+		t.Fatalf("--target codex installs the codex home and overrides the project's harnesses: exit %d\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "home", "skills", "standup", "SKILL.md")); err != nil {
+		t.Fatalf("home skill not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "home", "skills", ".ao-manifest.json")); err != nil {
+		t.Fatalf("home track file not written: %v", err)
+	}
+	code, out, _ = cli(t, "diff", "me", "--config", cfg)
+	if code != 0 || out != "home:me: 0 install, 0 update, 1 skip, 0 remove\n" {
+		t.Fatalf("diff of a home: exit %d\n%s", code, out)
+	}
+	code, out, _ = cli(t, "install", "--all", "--config", cfg)
+	if code != 0 || !strings.HasPrefix(out, "home:me: 0 install, 0 update, 1 skip, 0 remove\ndemo: 1 install") || !strings.Contains(out, ".claude/skills/standup") {
+		t.Fatalf("install --all: homes first, then projects: exit %d\n%s", code, out)
 	}
 }
 

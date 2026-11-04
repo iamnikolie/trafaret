@@ -1,12 +1,12 @@
 name: Feature request
-description: A command, flag, token or behavior that is missing
+description: A command, flag, template function, harness or behavior that is missing
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
       label: What are you trying to do
-      description: The task, not the solution — it often turns out an existing flag, token or overlay file covers it.
+      description: The task, not the solution — it often turns out an existing flag, var or overlay file covers it.
     validations:
       required: true
 

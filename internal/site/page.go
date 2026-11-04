@@ -129,6 +129,18 @@ const siteSkeleton = `<!DOCTYPE html>
   .pill.ok  { background: var(--ok-soft);  color: var(--ok); }
   .pill.warn{ background: var(--warn-soft); color: var(--warn); }
   .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .pill.origin { font-size: .72rem; font-weight: 600; letter-spacing: .02em;
+    background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+  .pill.origin.templates { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .pill.origin.global { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .pill.origin.role { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+  .notice { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px;
+    padding: .8rem 1.05rem; margin: 1rem 0; background: var(--card); box-shadow: var(--shadow); }
+  .notice.bad { border-color: var(--bad); background: var(--bad-soft); }
+  .notice.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .notice strong { display: block; margin-bottom: .25rem; }
+  .notice code { background: none; padding: 0; white-space: pre-wrap; word-break: break-word; }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: .9rem; margin: 1rem 0; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -201,14 +213,20 @@ const siteSkeleton = `<!DOCTYPE html>
   <div class="prose">{{.T.model_p}}</div>
   <div class="mermaid">{{.T.model_diagram}}</div>
   <div class="prose">{{.T.model_list}}</div>
+  <h2>{{.T.adapters_h}}</h2>
+  <div class="prose">{{.T.adapters_p}}</div>
+  <div class="tablewrap"><table>
+  <thead><tr><th>{{.T.col_item}}</th><th>claude</th><th>codex</th><th>cursor</th></tr></thead>
+  <tbody>{{.T.adapters_rows}}</tbody>
+  </table></div>
   <h2>{{.T.quick_h}}</h2>
-  <pre><code>make install        {{.T.quick_c1}}
-trafaret list             {{.T.quick_c2}}
-trafaret validate         {{.T.quick_c3}}
-trafaret diff &lt;project&gt;   {{.T.quick_c4}}
-trafaret install &lt;project&gt;   {{.T.quick_c5}}
-trafaret install --all       {{.T.quick_c6}}
-make site           {{.T.quick_c7}}</code></pre>
+  <pre><code>make install                       {{.T.quick_c1}}
+trafaret list                      {{.T.quick_c2}}
+trafaret validate                  {{.T.quick_c3}}
+trafaret diff &lt;project|home&gt;       {{.T.quick_c4}}
+trafaret install &lt;project|home&gt;    {{.T.quick_c5}}
+trafaret install --all             {{.T.quick_c6}}
+make site                          {{.T.quick_c7}}</code></pre>
   <p class="prose">{{.T.quick_flags}}</p>
 {{end}}
 
@@ -218,20 +236,36 @@ make site           {{.T.quick_c7}}</code></pre>
     <h1>{{.T.state_h}} <span class="live">LIVE</span></h1>
   </div>
   <div class="prose">{{.T.state_p}}</div>
-  <div class="tablewrap"><table>
-  <thead><tr><th>{{.T.col_project}}</th><th>{{.T.col_branch}}</th><th>{{.T.col_space}}</th><th>{{.T.col_targets}}</th><th>{{.T.col_bundles}}</th><th>{{.T.col_status}}</th></tr></thead>
+
+  <h2>{{.T.state_projects_h}}</h2>
+  {{if .Projects}}<div class="tablewrap"><table>
+  <thead><tr><th>{{.T.col_project}}</th><th>{{.T.col_harnesses}}</th><th>{{.T.col_bundles}}</th><th>{{.T.col_skills}}</th><th>{{.T.col_status}}</th></tr></thead>
   <tbody>
   {{range .Projects}}<tr>
     <td><strong>{{.Name}}</strong><br><span class="desc">{{.RepoRoot}}</span></td>
-    <td>{{.Branch}}</td>
-    <td>{{.Space}}</td>
-    <td>{{.Targets}}</td>
+    <td>{{.Harnesses}}</td>
     <td>{{.Bundles}}</td>
+    <td class="desc">{{.Skills}}</td>
     <td>{{if .Err}}<span class="pill bad">{{$.T.st_error}}</span><br><span class="desc">{{.Err}}</span>
         {{else if .InSync}}<span class="pill ok">{{$.T.st_insync}}</span> <span class="desc">{{.Skip}} {{$.T.st_files}}</span>
         {{else}}<span class="pill warn">{{$.T.st_pending}}</span><br><span class="desc">{{.Install}} {{$.T.st_new}} · {{.Update}} {{$.T.st_changed}} → <code>trafaret install {{.Name}}</code></span>{{end}}</td>
   </tr>{{end}}
-  </tbody></table></div>
+  </tbody></table></div>{{else}}<p class="desc">{{.T.state_none}}</p>{{end}}
+
+  <h2>{{.T.state_homes_h}}</h2>
+  {{if .Homes}}<div class="tablewrap"><table>
+  <thead><tr><th>{{.T.col_home}}</th><th>{{.T.col_harness}}</th><th>{{.T.col_bundles}}</th><th>{{.T.col_skills}}</th><th>{{.T.col_status}}</th></tr></thead>
+  <tbody>
+  {{range .Homes}}<tr>
+    <td><strong>{{.Name}}</strong><br><span class="desc">{{.Dir}}</span></td>
+    <td>{{.Harness}}</td>
+    <td>{{.Bundles}}</td>
+    <td class="desc">{{.Skills}}</td>
+    <td>{{if .Err}}<span class="pill bad">{{$.T.st_error}}</span><br><span class="desc">{{.Err}}</span>
+        {{else if .InSync}}<span class="pill ok">{{$.T.st_insync}}</span> <span class="desc">{{.Skip}} {{$.T.st_files}}</span>
+        {{else}}<span class="pill warn">{{$.T.st_pending}}</span><br><span class="desc">{{.Install}} {{$.T.st_new}} · {{.Update}} {{$.T.st_changed}} → <code>trafaret install {{.Name}}</code></span>{{end}}</td>
+  </tr>{{end}}
+  </tbody></table></div>{{else}}<p class="desc">{{.T.state_none}}</p>{{end}}
 {{end}}
 
 {{if eq .Page "catalog"}}
@@ -240,19 +274,24 @@ make site           {{.T.quick_c7}}</code></pre>
     <h1>{{.T.catalog_h}} <span class="live">LIVE</span></h1>
   </div>
   <div class="prose">{{.T.catalog_p}}</div>
+  {{if .SourceErr}}<div class="notice bad"><strong>{{.T.src_err_h}}</strong><code>{{.SourceErr}}</code><p class="desc">{{.T.src_err_p}}</p></div>
+  {{else}}
   <input class="filter" id="skillfilter" type="search" placeholder="{{.T.filter_ph}}">
 
   <div class="tablewrap"><div class="tbltitle"><strong>{{.T.catalog_skills}}</strong><span class="count">{{len .Skills}}</span></div><table class="filterable">
-  <thead><tr><th>{{.T.col_skill}}</th><th>{{.T.col_when}}</th><th class="muted">{{.T.col_words}}</th></tr></thead>
+  <thead><tr><th>{{.T.col_skill}}</th><th>{{.T.col_when}}</th><th>{{.T.col_source}}</th><th>{{.T.col_origin}}</th><th class="muted">{{.T.col_words}}</th></tr></thead>
   <tbody>
   {{range .Skills}}<tr>
-    <td><strong>{{.Name}}</strong><br><span class="desc">{{.Path}}</span></td>
-    <td class="desc">{{.Description}}</td><td>{{.Words}}</td>
+    <td><strong>{{.Name}}</strong></td>
+    <td class="desc">{{.Description}}</td>
+    <td class="desc"><code>{{.Path}}</code></td>
+    <td><span class="pill origin {{.Origin}}">{{.Origin}}</span></td>
+    <td>{{.Words}}</td>
   </tr>{{end}}
   </tbody></table></div>
 
-  <div class="tablewrap"><div class="tbltitle"><strong>{{.T.catalog_agents}}</strong><span class="count">{{len .Agents}}</span></div><table class="filterable">
-  <thead><tr><th>{{.T.col_agent}}</th><th>{{.T.col_role}}</th><th class="muted">{{.T.col_words}}</th></tr></thead>
+  <div class="tablewrap"><div class="tbltitle"><strong>{{.T.catalog_agents}}</strong><span class="count">{{len .Agents}}</span> <span class="desc">{{.T.agents_note}}</span></div><table class="filterable">
+  <thead><tr><th>{{.T.col_agent}}</th><th>{{.T.col_purpose}}</th><th class="muted">{{.T.col_words}}</th></tr></thead>
   <tbody>
   {{range .Agents}}<tr>
     <td><strong>{{.Name}}</strong><br><span class="desc">{{.Path}}</span></td>
@@ -260,7 +299,7 @@ make site           {{.T.quick_c7}}</code></pre>
   </tr>{{end}}
   </tbody></table></div>
 
-  <div class="tablewrap"><div class="tbltitle"><strong>{{.T.catalog_rules}}</strong><span class="count">{{len .Rules}}</span></div><table class="filterable">
+  <div class="tablewrap"><div class="tbltitle"><strong>{{.T.catalog_rules}}</strong><span class="count">{{len .Rules}}</span> <span class="pill origin">.mdc · Cursor</span> <span class="desc">{{.T.rules_note}}</span></div><table class="filterable">
   <thead><tr><th>{{.T.col_rule}}</th><th>{{.T.col_purpose}}</th><th class="muted">{{.T.col_words}}</th></tr></thead>
   <tbody>
   {{range .Rules}}<tr>
@@ -268,7 +307,9 @@ make site           {{.T.quick_c7}}</code></pre>
     <td class="desc">{{.Description}}</td><td>{{.Words}}</td>
   </tr>{{end}}
   </tbody></table></div>
+  {{end}}
 
+  {{if .ProjSkills}}<h2>{{.T.catalog_proj}}</h2>{{end}}
   {{range .ProjSkills}}
   <div class="tablewrap"><div class="tbltitle"><strong>{{.Project}}</strong><span class="count">{{len .Skills}}</span> <span class="desc">projects/{{.Project}}/skills/</span></div><table class="filterable">
   <thead><tr><th>{{$.T.col_skill}}</th><th>{{$.T.col_when}}</th><th class="muted">{{$.T.col_words}}</th></tr></thead>
@@ -280,13 +321,17 @@ make site           {{.T.quick_c7}}</code></pre>
   {{end}}
 
   <h2>{{.T.bundles_h}}</h2>
-  <p class="prose">{{.T.bundles_p}}</p>
+  <div class="prose">{{.T.bundles_p}}</div>
   <div class="tablewrap"><table>
-  <thead><tr><th>{{.T.col_bundle}}</th><th>{{.T.col_skills}}</th><th>{{.T.col_agents}}</th><th>{{.T.col_rules}}</th><th>{{.T.col_usedby}}</th></tr></thead>
+  <thead><tr><th>{{.T.col_bundle}}</th><th>{{.T.col_skills}}</th><th>{{.T.col_agents}}</th><th>{{.T.col_rules}}</th><th>{{.T.col_requires}}</th><th>{{.T.col_usedby}}</th></tr></thead>
   <tbody>
   {{range .Bundles}}<tr>
-    <td><strong>{{.Name}}</strong></td><td>{{.Skills}}</td><td>{{.Agents}}</td>
-    <td>{{if .Rules}}{{.Rules}}{{else}}—{{end}}</td><td class="desc">{{.UsedBy}}</td>
+    <td><strong>{{.Name}}</strong></td>
+    <td>{{if .Skills}}{{.Skills}}{{else}}—{{end}}</td>
+    <td>{{if .Agents}}{{.Agents}}{{else}}—{{end}}</td>
+    <td>{{if .Rules}}{{.Rules}}{{else}}—{{end}}</td>
+    <td>{{if .Requires}}<code>{{.Requires}}</code>{{else}}—{{end}}</td>
+    <td class="desc">{{.UsedBy}}</td>
   </tr>{{end}}
   </tbody></table></div>
 {{end}}
@@ -318,17 +363,35 @@ $EDITOR projects/&lt;name&gt;/skills/&lt;skill&gt;/SKILL.md   {{.T.ht2_c}}
 trafaret install &lt;name&gt;</code></pre>
   <div class="prose">{{.T.ht2_p}}</div>
   <h3>{{.T.ht3_h}}</h3>
-  <pre><code>projects:
+  <pre><code>engine: "&gt;=0.3.0"
+projects:
   myproj:
     repoRoot: myproj          {{.T.ht3_c1}}
-    bundles: [example]        {{.T.ht3_c3}}
-    tickets:
-      &lt;&lt;: *tickets-shape      {{.T.ht3_c2}}
-      space: "MyProj development"</code></pre>
+    bundles: [ship]           {{.T.ht3_c2}}
+    vars:                     {{.T.ht3_c3}}
+      branch: main
+      tracker: { kind: github, repo: me/myproj }
+      gates:
+        - { name: test, cmd: make test }</code></pre>
   <div class="prose">{{.T.ht3_p}}</div>
   <h3>{{.T.ht4_h}}</h3>
+  <pre><code>homes:
+  me-claude:
+    harness: claude
+    dir: ~/.claude            {{.T.ht4_c1}}
+    skills: [standup]         {{.T.ht4_c2}}</code></pre>
   <div class="prose">{{.T.ht4_p}}</div>
   <h3>{{.T.ht5_h}}</h3>
+  <pre><code># templates/bundles.yaml
+review:
+  skills: [review]
+  agents: [reviewer]
+  rules: [repo-stance]
+  requires: [branch, tracker.kind]</code></pre>
+  <div class="prose">{{.T.ht5_p}}</div>
+  <h3>{{.T.ht6_h}}</h3>
+  <div class="prose">{{.T.ht6_p}}</div>
+  <h3>{{.T.ht7_h}}</h3>
   <div class="tablewrap"><table>
   <thead><tr><th>{{.T.col_symptom}}</th><th>{{.T.col_fix}}</th></tr></thead>
   <tbody>{{.T.trouble_rows}}</tbody>

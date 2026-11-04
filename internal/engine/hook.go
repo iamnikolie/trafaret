@@ -21,14 +21,38 @@ func hookCommand(ctx string) string { return hookPrefix + ctx + `"` }
 // the session-context file under .claude/skills/ ("" removes the hook). Returns
 // the resulting FileStatus ("install"/"update"/"remove") or "" when nothing changed.
 func ensureSessionHook(repoRoot, ctx string, dryRun bool) (string, error) {
-	enable := ctx != ""
 	path := filepath.Join(repoRoot, filepath.FromSlash(settingsFile))
+	existing, err := os.ReadFile(path)
+	existed := err == nil
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	out, status, err := planSessionHook(existing, existed, ctx)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
+	if status == "" || dryRun {
+		return status, nil
+	}
+	if out == nil { // nothing but the hook was in the file
+		return status, os.Remove(path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	return status, os.WriteFile(path, out, 0o644)
+}
+
+// planSessionHook is the pure core of ensureSessionHook: given the current
+// content of .claude/settings.json (existed says whether the file is there at
+// all) it returns the content the file should have, and the status. A nil
+// content with status "remove" means the file held nothing else and goes away.
+func planSessionHook(existing []byte, existed bool, ctx string) (out []byte, status string, err error) {
+	enable := ctx != ""
 	settings := map[string]any{}
-	existed := false
-	if b, err := os.ReadFile(path); err == nil {
-		existed = true
-		if err := json.Unmarshal(b, &settings); err != nil {
-			return "", fmt.Errorf("%s: not valid JSON, refusing to manage the session hook: %w", path, err)
+	if existed {
+		if err := json.Unmarshal(existing, &settings); err != nil {
+			return nil, "", fmt.Errorf("not valid JSON, refusing to manage the session hook: %w", err)
 		}
 	}
 
@@ -53,7 +77,7 @@ func ensureSessionHook(repoRoot, ctx string, dryRun bool) (string, error) {
 
 	switch {
 	case enable && current == hookCommand(ctx), !enable && idx < 0:
-		return "", nil // already in the desired state
+		return nil, "", nil // already in the desired state
 	case enable:
 		entry := map[string]any{
 			"matcher": "startup|clear|compact",
@@ -72,16 +96,10 @@ func ensureSessionHook(repoRoot, ctx string, dryRun bool) (string, error) {
 		}
 		hooks["SessionStart"] = starts
 		settings["hooks"] = hooks
-		status := "update"
+		status = "update"
 		if !existed {
 			status = "install"
 		}
-		if !dryRun {
-			if err := writeSettings(path, settings); err != nil {
-				return "", err
-			}
-		}
-		return status, nil
 	default: // disable
 		starts = append(starts[:idx], starts[idx+1:]...)
 		if len(starts) == 0 {
@@ -94,30 +112,14 @@ func ensureSessionHook(repoRoot, ctx string, dryRun bool) (string, error) {
 		} else {
 			settings["hooks"] = hooks
 		}
-		if !dryRun {
-			if len(settings) == 0 {
-				if err := os.Remove(path); err != nil {
-					return "", err
-				}
-				return "remove", nil
-			}
-			if err := writeSettings(path, settings); err != nil {
-				return "", err
-			}
-		} else if len(settings) == 0 {
-			return "remove", nil
+		if len(settings) == 0 {
+			return nil, "remove", nil
 		}
-		return "update", nil
+		status = "update"
 	}
-}
-
-func writeSettings(path string, settings map[string]any) error {
 	b, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return append(b, '\n'), status, nil
 }

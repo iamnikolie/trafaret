@@ -1,0 +1,15 @@
+{{/*
+  Partials hold logic shared by several templates. Every .tmpl render sees
+  these defines; call one with {{template "name" .}}.
+*/}}
+{{- define "issueRef" -}}
+{{- if eq .Vars.tracker.kind "jira" -}}{{.Vars.tracker.key}}-123{{- else -}}#123{{- end -}}
+{{- end -}}
+
+{{- define "issueURL" -}}
+{{- if eq .Vars.tracker.kind "jira" -}}
+https://{{.Vars.tracker.host}}/browse/{{.Vars.tracker.key}}-<n>
+{{- else -}}
+https://github.com/{{.Vars.tracker.repo}}/issues/<n>
+{{- end -}}
+{{- end -}}

@@ -13,11 +13,11 @@ import (
 
 var installCmd = &cobra.Command{
 	Use:   "install [project|home]",
-	Short: "Render and write Claude, Cursor and Codex artifacts",
-	Long: `Renders the project's active bundles and writes the artifacts into its repo,
-pruning artifacts of bundles moved to disabled:. A home name copies global/skills
-and agents/*/skills into that home's skills directory. --all installs every
-project and every home in the manifest.`,
+	Short: "Render and write Claude, Codex and Cursor artifacts",
+	Long: `Renders a project's skills, agents and rules (its own lists plus its active
+bundles) into the repo, pruning artifacts of bundles moved to disabled:. A home
+name does the same into that home's harness directory (skills/, agents/, rules/).
+--all installs every project and every home in the manifest.`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runInstall(args, false)

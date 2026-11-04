@@ -15,7 +15,8 @@ Use GitHub's private vulnerability reporting:
 trafaret writes files into your repositories and your harness directories, so
 **a write outside the paths it is meant to manage** is the vulnerability this
 project cares about most. If you find a way to make `install` create, overwrite
-or delete a file outside the project's repo root or a home's skills directory —
+or delete a file outside the project's repo root or the skills, agents and rules
+directories of a home —
 a crafted manifest, template, track file or `bundles.yaml` — that is a report
 worth making, and a minimal config that shows it is enough.
 
@@ -32,7 +33,8 @@ Known and by design rather than vulnerabilities:
   read it first, and use `trafaret diff` before `trafaret install`.
 - **Prune deletes, but only what trafaret recorded.** It removes paths listed in
   its own track files, and only under `.claude/`, `.cursor/`, `.agents/` and
-  `.codex/` in a repo (or inside a home's skills directory). Paths containing
+  `.codex/` in a repo (or inside a home's `skills/`, `agents/` and `rules/`
+  directories). Paths containing
   `..` are ignored. A hand-edited track file is as trusted as the rest of your
   config directory.
 - **The session hook runs a shell command.** A bundle's `sessionContext` becomes

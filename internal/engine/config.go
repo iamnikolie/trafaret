@@ -1,12 +1,14 @@
-// Package engine is the trafaret core: the manifest model and its resolution, the
-// bundle registry, template rendering, install and prune, homes, the managed
-// session hook, and config-directory resolution with the embedded example
-// templates layered under the user's on-disk overlay.
+// Package engine is the trafaret core: the manifest model and its vars merge,
+// the bundle registry, the source namespace, template rendering, the harness
+// adapters, install and prune for projects and homes alike, the managed session
+// hook, and config-directory resolution with the embedded example templates
+// layered under the user's on-disk overlay.
 //
-// Everything the binary needs from "its own side" (the example templates) is
-// compiled in; everything that belongs to the user (manifest.yaml, global/,
-// agents/, projects/, optional templates/ overlay) is read from the config
-// directory.
+// The engine knows harness layouts and nothing else: every project fact is a
+// free value under vars:. Everything the binary needs from "its own side" (the
+// example templates) is compiled in; everything that belongs to the user
+// (manifest.yaml, global/, agents/, projects/, optional templates/ overlay) is
+// read from the config directory.
 package engine
 
 import (
@@ -25,7 +27,7 @@ const (
 
 // embeddedTemplates returns the example templates compiled into the binary,
 // rooted so that paths read "skills/<name>/SKILL.md.tmpl", "agents/<name>.md.tmpl",
-// "cursor/rules/<name>.mdc.tmpl".
+// "rules/<name>.md.tmpl", "partials/<name>.tmpl" and "bundles.yaml".
 func embeddedTemplates() fs.FS { return examples.FS }
 
 // --- engine ---------------------------------------------------------------

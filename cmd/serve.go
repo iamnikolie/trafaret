@@ -9,7 +9,7 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Serve the local live manual (default 127.0.0.1:4477)",
 	Long: `Serves a bilingual operator manual rendered from the config directory on every
-refresh: live per-project sync status, the template catalog and bundle table.
+refresh: live per-project and per-home sync status, the source catalog and bundle table.
 Binds the --addr you give (default 127.0.0.1:4477); nothing is published.`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -1,11 +1,16 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// Accepted so `go test ./... -run Golden -update` works across packages; the
+// golden test itself lives in internal/engine.
+var _ = flag.Bool("update", false, "regenerate golden files (internal/engine)")
 
 // The repository is public: no deployment-specific name, host, path or address
 // may appear in the sources, templates or docs. Values a template needs come from

@@ -16,12 +16,18 @@ those describe someone's setup.
 - **Rendering is byte-stable.** A change to the engine or to an example
   template that alters what an existing manifest renders shows up as `update`
   lines in `trafaret diff`. Check `diff` against a real config before and
-  after; a deliberate change is a deliberate commit.
-- **The engine is generic.** Nothing in the repository may name a person, a
-  host, an address, a workspace URL, an absolute home path or an email. A value
-  a template needs comes from a manifest token (document it in
-  `docs/token-reference.md`); examples use neutral names (`acme`,
-  `example.com`). `TestNoPrivateStringsInSources` scans the whole tree.
+  after; a deliberate change is a deliberate commit. The demo's committed
+  output, `examples/demo/out`, is the documentation of what the examples
+  render to: `go test ./...` fails until you regenerate it with
+  `go test ./... -run Golden -update`, and the diff of `out/` is reviewed like
+  code.
+- **The engine is generic.** It knows harness layouts and nothing about
+  tickets or any process. Nothing in the repository may name a person, a host,
+  an address, a workspace URL, an absolute home path or an email. A value a
+  template needs comes from a manifest var (`vars:`, read as `.Vars`; the
+  template contract is in `docs/template-reference.md`); examples use neutral
+  names (`acme`, `example.com`). `TestNoPrivateStringsInSources` scans the
+  whole tree.
 - **The bundle registry is data.** Bundles live in `examples/bundles.yaml` (the
   embedded examples) or in a config's own `templates/bundles.yaml`, never in Go
   code. A config's `bundles.yaml` shadows the embedded one; it is not merged.
@@ -29,9 +35,9 @@ those describe someone's setup.
   needs a non-empty `name` and `description`, and no unquoted value may contain
   ` #`.
 - **Only what trafaret wrote is ever pruned.** Prune works from the track
-  files (`.claude/ao-manifest.json` in a repo, `.ao-manifest.json` in a home's
-  skills directory), never from a directory scan. Their historical names stay:
-  renaming them would orphan existing installs.
+  files (`.claude/ao-manifest.json` in a repo, `.ao-manifest.json` in each of
+  `skills/`, `agents/` and `rules/` of a home), never from a directory scan.
+  Their historical names stay: renaming them would orphan existing installs.
 
 ## Layout
 
@@ -39,10 +45,10 @@ those describe someone's setup.
 |---|---|
 | `main.go` | calls `cmd.Execute()` |
 | `cmd/` | the cobra commands, one file per command; `skill.md` is embedded and printed by `trafaret skill` |
-| `internal/engine/` | manifest, bundle registry, render, install, prune, homes, session hook, config-directory resolution, layered templates, the `engine:` version gate |
+| `internal/engine/` | manifest and vars merge, bundle registry, source namespace, render, harness adapters, install, prune, session hook, config-directory resolution, layered templates, the `engine:` version gate |
 | `internal/site/` | the operator site behind `trafaret serve`: data collection, page skeleton, EN/RU strings, vendored mermaid |
-| `examples/` | the embedded example templates and `bundles.yaml` (`go:embed`) |
-| `docs/` | the token reference, onboarding guide and design notes |
+| `examples/` | the embedded example templates and `bundles.yaml` (`go:embed`), and `demo/`, a runnable config with its golden output in `demo/out` |
+| `docs/` | the template reference, onboarding guide and design notes |
 
 ## Pull requests
 

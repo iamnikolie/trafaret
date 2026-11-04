@@ -1,0 +1,6 @@
+---
+description: How work lands in acme-web — always on while editing inside /work/acme-web.
+alwaysApply: true
+---
+
+In acme-web every change lands on `develop` through the `ship` skill; never push past a red gate.

@@ -47,3 +47,37 @@ func TestPartialTargetPrunePreservesOtherHarnesses(t *testing.T) {
 		}
 	}
 }
+
+// Prune deletes only recorded paths under a harness directory: a hand-edited
+// track file naming something else is ignored, not obeyed.
+func TestPruneIgnoresTrackedPathsOutsideHarnessDirs(t *testing.T) {
+	repo := t.TempDir()
+	writeTree(t, repo, map[string]string{"README.md": "mine", "src/main.go": "mine", ".claude/skills/x/SKILL.md": "x"})
+	writeTree(t, repo, map[string]string{".claude/ao-manifest.json": `["README.md", "src/main.go", "../outside", ".claude/../README.md", ".claude/skills/x/SKILL.md"]`})
+	removed, err := pruneStale(repo, map[string]bool{}, []string{"claude"}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || !strings.HasSuffix(filepath.ToSlash(removed[0].Path), ".claude/skills/x/SKILL.md") {
+		t.Fatalf("only the harness-dir path may go: %#v", removed)
+	}
+	for _, keep := range []string{"README.md", "src/main.go"} {
+		if !fileExists(filepath.Join(repo, keep)) {
+			t.Errorf("%s must survive", keep)
+		}
+	}
+	if fileExists(filepath.Join(repo, ".claude", "skills")) {
+		t.Error("the emptied directories under the harness root should be removed")
+	}
+	if !fileExists(filepath.Join(repo, ".claude")) {
+		t.Error("the harness root itself must stay")
+	}
+}
+
+func TestPruneRefusesACorruptTrackFile(t *testing.T) {
+	repo := t.TempDir()
+	writeTree(t, repo, map[string]string{".claude/ao-manifest.json": "{nope"})
+	if _, err := pruneStale(repo, map[string]bool{}, []string{"claude"}, false, false); err == nil || !strings.Contains(err.Error(), "corrupt track file") {
+		t.Fatalf("got %v", err)
+	}
+}

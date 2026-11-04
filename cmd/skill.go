@@ -13,7 +13,7 @@ var skillDoc string
 var skillCmd = &cobra.Command{
 	Use:   "skill",
 	Short: "Print the agent reference for this CLI",
-	Long:  "Prints the full trafaret reference — commands, flags, the config directory, bundles.yaml and the overlay rule — for use as agent context.",
+	Long:  "Prints the full trafaret reference — commands, flags, the config directory, the manifest and vars, templates, harness adapters and bundles.yaml — for use as agent context.",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(stdout, skillDoc)

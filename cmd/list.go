@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/iamnikolie/trafaret/internal/engine"
 	"github.com/spf13/cobra"
 )
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List the projects (and homes) in the manifest",
+	Short: "List the projects and homes in the manifest",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, err := eng.LoadManifest()
@@ -23,53 +24,54 @@ var listCmd = &cobra.Command{
 			enc := json.NewEncoder(stdout)
 			enc.SetIndent("", "  ")
 
-			_ = enc.Encode(m.Projects)
+			_ = enc.Encode(struct {
+				Projects map[string]engine.Project `json:"projects"`
+				Homes    map[string]engine.Home    `json:"homes"`
+			}{m.Projects, m.Homes})
 
 			return nil
 		}
 
-		var names []string
-		for n := range m.Projects {
-			names = append(names, n)
+		dash := func(s string) string {
+			if s == "" {
+				return "-"
+			}
+
+			return s
 		}
 
-		sort.Strings(names)
-		fmt.Fprintf(stdout, "%-16s %-10s %-8s %s\n", "PROJECT", "TARGETS", "TICKETS", "BUNDLES")
+		fmt.Fprintf(stdout, "%-16s %-20s %-16s %s\n", "PROJECT", "HARNESSES", "BUNDLES", "SKILLS")
 
-		for _, n := range names {
+		for _, n := range sortedNames(m.Projects) {
 			p := m.Projects[n]
-			fmt.Fprintf(stdout, "%-16s %-10s %-8s %s\n", n, strings.Join(p.Targets, "+"), p.Tickets.Config, strings.ReplaceAll(p.BundlesDisplay(), ", ", ","))
+			fmt.Fprintf(stdout, "%-16s %-20s %-16s %s\n", n, strings.Join(p.Harnesses, "+"),
+				dash(strings.ReplaceAll(p.BundlesDisplay(), ", ", ",")), dash(strings.Join(eng.ProjectSkills(p), ",")))
 		}
 
 		if len(m.Homes) == 0 {
 			return nil
 		}
 
-		var homes []string
-		for n := range m.Homes {
-			homes = append(homes, n)
-		}
+		fmt.Fprintf(stdout, "\n%-16s %-10s %-30s %s\n", "HOME", "HARNESS", "DIR", "SKILLS")
 
-		sort.Strings(homes)
-		fmt.Fprintf(stdout, "\n%-16s %-30s %s\n", "HOME", "SKILLS DIR", "SKILLS")
-
-		for _, n := range homes {
+		for _, n := range sortedNames(m.Homes) {
 			h := m.Homes[n]
-
-			skills := "all"
-			if len(h.Skills) > 0 {
-				skills = strings.Join(h.Skills, ",")
-			}
-
-			if len(h.Skip) > 0 {
-				skills += " (skip " + strings.Join(h.Skip, ",") + ")"
-			}
-
-			fmt.Fprintf(stdout, "%-16s %-38s %s\n", n, h.SkillsDir, skills)
+			fmt.Fprintf(stdout, "%-16s %-10s %-30s %s\n", n, h.Harness, h.Dir, eng.HomeSkills(h))
 		}
 
 		return nil
 	},
+}
+
+func sortedNames[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for n := range m {
+		out = append(out, n)
+	}
+
+	sort.Strings(out)
+
+	return out
 }
 
 func init() {

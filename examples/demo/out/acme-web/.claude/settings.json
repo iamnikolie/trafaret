@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "cat \"$CLAUDE_PROJECT_DIR/.claude/skills/ship/session-context.md\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|clear|compact"
+      }
+    ]
+  }
+}
